@@ -1,0 +1,10 @@
+Decide meeting times
+  Klint prefers Saturdays or Sundays
+
+Decide project roles
+  Manager - Wendy?
+  Language Guru - Connor? 
+  System Architect - Connor?
+  Tester - Klint?
+  
+Project Proposal
