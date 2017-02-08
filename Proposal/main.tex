@@ -186,7 +186,7 @@ Pipeline {
      * OpenGL. “color” is a per-vertex output that gets
      * interpolated across the triangle, called a “varying”
      * in OpenGL, while “position” is a builtin that 
- * determines where the triangle is rendered.
+     * determines where the triangle is rendered.
      */
     vertex_shader: fn @vertex (color: vec3, pos: vec3) -> (color: vec4, position: vec4) {
         return (vec4(color, /* alpha */ 1),
@@ -203,8 +203,8 @@ Pipeline {
     },
     
     /* The framebuffer is what accumulates the final
- * color and depth.
- */
+     * color and depth.
+     */
     framebuffer: Framebuffer<RGBA8>
 } my_pipeline;
 
