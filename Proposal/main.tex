@@ -168,6 +168,8 @@
 \section{Sample Code}
 
 \begin{lstlisting}
+/* Draws a spinning triangle */
+
 var transform: mat3;
 
 fn generate_transform(angle: float) {
@@ -177,7 +179,7 @@ fn generate_transform(angle: float) {
 }
 
 /* This creates a pipeline, which includes everything necessary
- * to draw some triangles to the framebuffer(s)
+ * to draw some triangles to the framebuffer(s).
  */
 Pipeline {
     /* The vertex shader is responsible for transforming
@@ -188,9 +190,16 @@ Pipeline {
      * in OpenGL, while "position" is a builtin that 
      * determines where the triangle is rendered.
      */
-    vertex_shader: fn @vertex (color: vec3, pos: vec3) -> (color: vec4, position: vec4) {
+    vertex_shader: fn @vertex (color: vec3, pos: vec3) ->
+    	(color: vec4, position: vec4) {
+    	/* Note that here, we're pulling in "transform", which was
+    	 * declared as a global variable outside the pipeline. This
+    	 * is a simple way of passing data that doesn't change per-vertex
+    	 * to the shader. In OpenGL, this would require creating a
+    	 * uniform, binding it, and updating it per-draw if it changes.
+    	 */
         return (vec4(color, /* alpha */ 1),
-   vec4(transform * pos, /* w coordinate */ 1));
+   				 vec4(transform * pos, /* w coordinate */ 1));
     },
 
     /* The fragment shader is responsible for determining
@@ -202,31 +211,56 @@ Pipeline {
         return color;
     },
     
+    /* The "buffer" type is a way to represent data stored on the GPU.
+     * Buffers cannot be accessed directly, they can only be uploaded
+     * to or downloaded from. The type of the buffer, "vec3", means that
+     * data is stored uncompressed in GPU memory as an array of vectors of
+     * 3 floating point numbers (compare to the framebuffer below). This
+     * particular buffer is used by the vertex shader as an attribute,
+     * since the name matches the parameter of the function, which means
+     * that assigning to this member will bind the buffer to the
+     * Vertex Array Object (VAO) of the vertex shader in OpenGL terms.
+     */
+     color: Buffer<vec3>,
+     
+     /* similar to the above */
+     pos: Buffer<vec3>,
+    
     /* The framebuffer is what accumulates the final
-     * color and depth.
+     * color and depth. RGBA8 indicates that the pixels should
+     * store their red, green, blue, and alpha as 8-bit integers
+     * where 0 maps to 0.0 and 255 maps to 1.0, and is part of the
+     * type.
      */
     framebuffer: Framebuffer<RGBA8>
 } my_pipeline;
 
 /* transfer data from the CPU to the GPU */
-my_pipeline.upload_color([vec3(1, 0, 0), vec3(1, 0, 0), vec3(1, 0, 0)])
-my_pipeline.upload_pos([vec3(-1.0, -1.0, 0.0),
-                        vec3(1.0, -1.0, 0.0),
-                        vec3(0.0,  1.0, 0.0)])
+Buffer<vec3> color, pos;
+color.upload([vec3(1.0, 0.0, 0.0),
+			   vec3(0.0, 1.0, 0.0),
+			   vec3(0.0, 0.0, 1.0)]);
+pos.upload([vec3(-1.0, -1.0, 0.0),
+			 vec3(1.0, -1.0, 0.0),
+			 vec3(0.0,  1.0, 0.0)];
+/* prepare the pipeline */
+my_pipeline.color = color;
+my_pipeline.pos = pos;
 
 /* this creates a window and the framebuffer for it */
 Window my_window = make_window(1024, 768, "My Window");
 
 /* tell the pipeline to draw to the window's framebuffer */
-My_pipeline.framebuffer = my_window.framebuffer;
+my_pipeline.framebuffer = my_window.framebuffer;
 
+/* main loop */
 var angle: float = 0;
 do {
     angle += 1.0;
     generate_transform(angle);
     draw(my_pipeline);
-    window.swap_buffers();
-} while (!window.should_close());
+    swap_buffers(window);
+} while (!should_close(window));
 
 \end{lstlisting}
 
