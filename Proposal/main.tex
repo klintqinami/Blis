@@ -181,11 +181,11 @@ fn generate_transform(angle: float) {
  */
 Pipeline {
     /* The vertex shader is responsible for transforming
-     * triangle vertices into screen space. “color” and
-     * “pos” are per-vertex inputs, called “attributes” in
-     * OpenGL. “color” is a per-vertex output that gets
-     * interpolated across the triangle, called a “varying”
-     * in OpenGL, while “position” is a builtin that 
+     * triangle vertices into screen space. "color" and
+     * "pos" are per-vertex inputs, called "attributes" in
+     * OpenGL. "color" is a per-vertex output that gets
+     * interpolated across the triangle, called a "varying"
+     * in OpenGL, while "position" is a builtin that 
      * determines where the triangle is rendered.
      */
     vertex_shader: fn @vertex (color: vec3, pos: vec3) -> (color: vec4, position: vec4) {
@@ -194,9 +194,9 @@ Pipeline {
     },
 
     /* The fragment shader is responsible for determining
-     * the color of the “fragment” (potential pixel).
-     * “color” is a varying input, matched by name with
-     * “color” from the vertex shader.
+     * the color of the "fragment" (potential pixel).
+     * "color" is a varying input, matched by name with
+     * "color" from the vertex shader.
      */
     fragment_shader: fn @fragment (color: vec4) -> (framebuffer: vec4) {
         return color;
@@ -215,9 +215,9 @@ my_pipeline.upload_pos([vec3(-1.0, -1.0, 0.0),
                         vec3(0.0,  1.0, 0.0)])
 
 /* this creates a window and the framebuffer for it */
-Window my_window = make_window(1024, 768, “My Window”);
+Window my_window = make_window(1024, 768, "My Window");
 
-/* tell the pipeline to draw to the window’s framebuffer */
+/* tell the pipeline to draw to the window's framebuffer */
 My_pipeline.framebuffer = my_window.framebuffer;
 
 var angle: float = 0;
