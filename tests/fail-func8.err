@@ -1,0 +1,1 @@
+Fatal error: exception Failure("illegal actual argument found void expected bool in bar()")
