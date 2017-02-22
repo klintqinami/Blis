@@ -169,7 +169,7 @@ For the most part, tokens in Blis are similar to C. The main difference is the e
 
 \subsection{Comments}
 
-Blis has C-style comments, beginning with \code{/*} and ending with \code{*/} which do not nest.
+Blis has C-style comments, beginning with \code{/*} and ending with \code{*/} which do not nest. C++ style comments, beginning with \code{//} and extending to the end of the line, are also supported.
 
 \subsection{Identifiers}
 
@@ -283,6 +283,8 @@ In addition to the special operators and built-in functions, \code{vecN} types h
 
 Oftentimes, when handling large amounts of data, we want to store a more compact representation of the data in order to reduce bandwidth and memory requirements. For example, color data is often stored using 8 bits per channel since a larger color depth wouldn't cause any noticeable increase in quality. Conceptually, each 8-bit channel represents a luminance value between 0 (minimum luminance) and 1 (maximum luminance), with 0 mapping to 0 and 255 mapping to 1. GPU's even include special support for packed formats like these, being able to sample from an image of packed data and convert it on the fly to floating point, or vice versa, quantizing a floating-point output to a packed format when writing to an image. To support this use-case, Blis has special packed types such as \code{RGBA8} which are described in the table below. These types are implicitly convertible to and from the appropriate vector type (given in the following table), but converting from the vector type to the packed type will obviously involve some loss of data. The conversion may happen on the CPU, or for operations involving the GPU, it may happen automatically through OpenGL.
 
+\vspace{3mm}
+
 \begin{tabular}{| c | c | c | c |}
 \hline
 Packed Type & Vector Type & Packed to Vector & Vector to Packed \\
@@ -299,7 +301,7 @@ Packed Type & Vector Type & Packed to Vector & Vector to Packed \\
 
 \subsection{Arrays}
 
-Blis supports one and two-dimensional arrays of fixed and variable size. An array of \code{foo}'s is denoted as \code{foo[N]}, where \code{N} is an integer literal, or \code{foo[]} for a runtime-sized array. Two-dimensional runtime-sized arrays are denoted by \code{foo[,]} or \code{foo[N,]} where \code{N} is an integer literal. If the outer dimension is omitted, then it is sized at runtime as well. The reason for including two-dimensional runtime-sized arrays explicitly, rather than using \code{foo[][]}, is that \code{foo[][]} is semantically different from \code{foo[,]} --- a variable of the former type can have elements of the outer array with different sizes, while the latter is a two dimensional array where all the inner arrays must have the same size. The latter type construction, when combined with packed types, is useful for representing images whose width and height is only known at runtime; for example, a \code{loadImage()} routine would probably return a value of type \code{RGBA8[,]} or \code{RGB8[,]}.
+Blis supports one and two-dimensional arrays of fixed and variable size. An array of \code{foo}'s is denoted as \code{foo[N]}, where \code{N} is an integer literal, or \code{foo[]} for a runtime-sized array. Two-dimensional runtime-sized arrays are denoted by \code{foo[,]} or \code{foo[N,]} where \code{N} is an integer literal. If the outer dimension is omitted, then it is sized at runtime as well. The reason for including two-dimensional runtime-sized arrays explicitly, rather than using \code{foo[][]}, is that \code{foo[][]} is semantically different from \code{foo[,]} --- a variable of the former type can have elements of the outer array with different sizes, while the latter is a two dimensional array where all the inner arrays must have the same size. The latter type construction, when combined with packed types, is useful for representing images whose width and height are only known at runtime; for example, a \code{loadImage()} routine would probably return a value of type \code{RGBA8[,]} or \code{RGB8[,]}.
 
 Although constant values of type \code{foo[,]} cannot be constructed directly, values of type \code{foo[N][M]} can be implicitly converted to \code{foo[,]} as described in section~\ref{conversions}. Arrays of type \code{foo[N]} can be constructed by giving a comma-separated list of \code{N} values enclosed by \code{[} and \code{]}. For example,
 
@@ -355,9 +357,58 @@ There are a few cases in Blis where one type can be an acceptable substitute for
 	\item \textit{A} is of type \code{\textit{C}[N]} and \textit{B} is of type \code{\textit{D}[N]} or \code{\textit{D}[]} and \textit{C} can be converted to \textit{D}.
 \end{itemize}
 
-Note that if \textit{A} and \textit{B} are both struct types, then for them to be the same type, they must have the same name; that is, structure  equality is by name. Also, this relation is not symmetric (for example, \code{float[5]} can be converted to \code{float[]} but not vice versa), but it is transitive, and of course it is reflexive.
+Note that if \textit{A} and \textit{B} are both struct types, then for them to be the same type, they must have the same name; that is, structure  equality is by name, not structural. Also, this relation is not symmetric (for example, \code{float[5]} can be converted to \code{float[]} but not vice versa), but it is transitive, and of course it is reflexive.
+
+There are also the usual explicit type conversions. Similar to GLSL, they use the function call syntax. Thus, you can do:
+
+\begin{lstlisting}
+float foo = float(42);
+float bar = float(true); // returns 1.0
+int bar = int(false); // returns 0
+\end{lstlisting}
+
+The full complement of 6 conversions amongst \code{float}, \code{int}, and \code{bool} is provided with the usual meaning, except for converting to \code{bool} which can be done through comparing with 0. Also, \code{char} can be be converted to \code{int} and vice versa, with the latter reinterpreting the \code{int} as unsigned and taking the lowest 8 bits.
 
 \subsection{Operators} \label{operators}
+
+The operators supported by Blis, taken from GLSL, are:
+
+\vspace{3mm}
+
+\begin{tabular}{| l | l | l | l |}
+\hline
+Precendence & Operator Class & Operators & Associativity \\ \hline
+1 & Parenthetical Grouping 	& \code{(} \code{)} & Left to right \\ \hline
+2 & Array Subscript & \code{[} \code{]} & Left to right \\
+  & Function Call & \code{(} \code{)} & \\
+  & Structure Member & \code{.} &  \\
+  & Postfix Increment/Decrement & \code{++}, \code{--} & \\ \hline
+3 & Prefix Increment/Decrement & \code{++}, \code{--} & Right to Left \\
+  & Unary Operators & \code{+}, \code{-}, \code{\textasciitilde}, \code{!} & \\ \hline
+4 & Multiplicative Operators & \code{*}, \code{/}, \code{\%} & Left to Right  \\ \hline
+5 & Additive Binary Operators & \code{+}, \code{-} & Left to Right \\ \hline
+6 & Bit-wise Shift & \code{<<}, \code{>>} & Left to Right \\ \hline
+7 & Relational & \code{<}, \code{>}, \code{<=}, \code{>=} & Left to Right \\ \hline
+8 & Equality & \code{==}, \code{!=} & Left to Right \\ \hline
+9 & Bitwise And & \code{\&} & Left to Right \\ \hline
+10 & Bitwise Exclusive Or & \code{\textasciicircum} & Left to Right \\ \hline
+11 & Bitwise Inclusive Or & \code{|} & Left to Right \\ \hline
+12 & Logical And & \code{\&\&} & Left to Right \\ \hline
+13 & Logical Exclusive Or & \code{\textasciicircum\textasciicircum} & Left to Right \\ \hline
+14 & Logical Inclusive Or & \code{||} & Left to Right \\ \hline
+15 & Selection & \code{?} \code{:} & Right to Left \\ \hline
+16 & Assignment & \code{=} & Right to Left \\
+   & In-place Arithmetic & \code{+=}, \code{-=}, \code{*=}, & \\
+   &                     & \code{/=}, \code{\%=}, \code{<<=}, & \\
+   &                     & \code{>>=}, \code{\&=}, \code{\textasciicircum=}, & \\
+   &                     & \code{|=} & \\ \hline
+17 & Sequencing & \code{,} & Left to Right \\ \hline
+
+
+
+
+
+\end{tabular}
 
 \subsection{Functions}
 
