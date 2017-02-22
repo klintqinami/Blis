@@ -2,12 +2,12 @@
 \usepackage[letterpaper, portrait, margin=1.5in]{geometry}
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath, amsthm, amssymb}
-\usepackage{amssymb}
-\usepackage{mathtools}
 \usepackage{listings}
-\usepackage{mathabx}
 \usepackage{tkz-graph}  
 \usepackage{mathtools}
+\usepackage{multicol}
+
+\newcommand{\code}[1]{\texttt{#1}}
 
 
 \definecolor{dkgreen}{rgb}{0,0.6,0}
@@ -165,27 +165,131 @@
 
 \section{Lexical Conventions}
 
+For the most part, tokens in Blis are similar to C. The main difference is the extra keywords added to support vector and matrix types. There are four kinds of tokens: identifiers, keywords, literals, and expression operators like \code{(}, \code{)}, and \code{*}. Blis is a free-format language, so comments and whitespace are ignored except to separate tokens.
+
 \subsection{Comments}
+
+Blis has C-style comments, beginning with \code{/*} and ending with \code{*/} which do not nest.
 
 \subsection{Identifiers}
 
+An identifier consists of an alphabetic character or underscore followed by a sequence of letters, digits, and underscores.
+
 \subsection{Keywords}
+
+The following identifiers are reserved as keywords, and may not be used as identifiers:
+
+\begin{multicols}{3}
+\begin{itemize}
+	\item \code{int}
+	\item \code{char}
+	\item \code{float}
+	\item \code{bool}
+	\item \code{struct}
+	\item \code{return}
+	\item \code{break}
+	\item \code{continue}
+	\item \code{if}
+	\item \code{else}
+	\item \code{for}
+	\item \code{while}
+	\item \code{true}
+	\item \code{false}
+	\item \code{vec2}
+	\item \code{vec3}
+	\item \code{vec4}
+	\item \code{mat2x2}
+	\item \code{mat2x3}
+	\item \code{mat2x4}
+	\item \code{mat3x2}
+	\item \code{mat3x3}
+	\item \code{mat3x4}
+	\item \code{mat4x2}
+	\item \code{mat4x3}
+	\item \code{mat4x4}
+	\item \code{bvec2}
+	\item \code{bvec3}
+	\item \code{bvec4}
+	\item \code{bmat2x2}
+	\item \code{bmat2x3}
+	\item \code{bmat2x4}
+	\item \code{bmat3x2}
+	\item \code{bmat3x3}
+	\item \code{bmat3x4}
+	\item \code{bmat4x2}
+	\item \code{bmat4x3}
+	\item \code{bmat4x4}
+	\item \code{RGBA8}
+	\item \code{RGB8}
+	\item \code{RGBA8}
+	\item \code{RG8}
+	\item \code{RGBA8}
+	\item \code{R8}
+	\item \code{RGBA8}
+	\item \code{@vertex}
+	\item \code{@fragment}
+
+\end{itemize}
+\end{multicols}
+
+\subsection{Literals}
+
+\subsubsection{Integer Literals}
+
+Integer literals consist of a sequence of one or more of the digits 0-9. Constants must be in decimal.
+
+\subsubsection{Floating Point Literals}
+
+A floating-point literal consists of an integer part, a decimal, a fractional part, and \code{e} followed by an optionally signed exponent. Both the integer and fractional parts consist of a sequence of digits. At least one of the integer and fractional parts must be present, and at least one of the decimal point and the exponent must be present. Since Blis only supports single-precision floating point, all floating point constants are considered single-precision.
+
+\subsubsection{Character Literals} \label{charliterals}
+
+A character literal consists of a single character, or a backslash followed by one of \code{'}, \code{n}, \code{r}, \code{t}, or a sequence of decimal digits that must form a number from 0 to 255 which represents an ASCII code. \code{'\textbackslash''}, \code{'\textbackslash{}n'}, \code{'\textbackslash{}r'}, and \code{'\textbackslash{}t'} have the usual meanings.
+
+\subsubsection{Boolean Literals}
+
+Boolean literals consist of the two keywords \code{true} and \code{false}.
+
+\subsubsection{String Literals}
+
+String literals consist of a series of characters surrounded by \code{"}. All the escapes described in section~\ref{charliterals} are supported, as well as \code{\textbackslash{}"} to escape a \code{"}. String literals have type \code{char[n]}, i.e. a fixed-size array of characters where \code{n} is the number of characters. For example, \code{"Hello world"} has type \code{char[11]}. Unlike C, there is no extra \code{'\textbackslash{}0'} inserted at the end of the string.
 
 \section{Syntax and Semantics}
 
 \subsection{Basic Types}
 
+\subsubsection{Integers}
+
+Blis supports integers through the \code{int} type, which is a 32-bit two's-complement signed integer.
+
+\subsubsection{Floating Point}
+
+Blis supports single-precision (32-bit) floating point numbers through the \code{float} type.
+
+\subsubsection{Booleans}
+
+Blis supports booleans through the \code{bool} type. Booleans may only ever be \code{true} or \code{false}.
+
 \subsection{Vectors and Matrices}
 
+To more easily represent position data and color data, Blis supports vectors and matrices of floating-point numbers with the \code{vec2}, \code{vec3}, and \code{vec4} builtin types, as well as \code{matNxM} where  $1 \leq \code{N} \leq 4$ and $1 \leq \code{M} \leq 4$, similar to GLSL. Blis supports the full complement of matrix-vector multiplication operations on these types as described in section~\ref{operators}, as well as component-wise multiplication and a number of built-in functions described in section~\ref{builtins}.
+
+Blis also supports vectors and matrices of boolean type, denoted by \code{bvec2}, \code{bmat2x2}, etc., which are the result of the comparison operators \code{==}, \code{!=}, \code{>}, \code{<}, \code{>=}, and \code{<=} applied to floating-point vectors and matrices. The builtin functions \code{all()} and \code{any()} can be used to reduce these types to a single boolean value, so that e.g. \code{all(foo == bar)} checks that all the components of \code{foo} and \code{bar} are equal.
+
+In addition to the special operators and built-in functions, \code{vecN} types have \code{x}, \code{y}, \code{z}, and \code{w} members as appropriate as if they were normal structures, and \code{matNxM} types have \code{xx}, \code{xy}, \code{yx}, etc. Thus, the syntax to access the \code{x} component of a \code{vec4 foo} is \code{foo.x}. This also applies to the boolean vector and matrix types.
 \subsection{Arrays}
+
+\subsection{Structures}
 
 \subsection{Constants}
 
 \subsection{Type Conversions}
 
-\subsection{Operators}
+\subsection{Operators} \label{operators}
 
-\subsection{Defining Functions}
+\subsection{Functions}
+
+\subsection{Builtin Functions} \label{builtins}
 
 \subsection{Buffers and Images}
 
