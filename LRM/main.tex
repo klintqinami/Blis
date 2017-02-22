@@ -221,11 +221,8 @@ The following identifiers are reserved as keywords, and may not be used as ident
 	\item \code{bmat4x4}
 	\item \code{RGBA8}
 	\item \code{RGB8}
-	\item \code{RGBA8}
 	\item \code{RG8}
-	\item \code{RGBA8}
 	\item \code{R8}
-	\item \code{RGBA8}
 	\item \code{@vertex}
 	\item \code{@fragment}
 
@@ -260,7 +257,11 @@ String literals consist of a series of characters surrounded by \code{"}. All th
 
 \subsubsection{Integers}
 
-Blis supports integers through the \code{int} type, which is a 32-bit two's-complement signed integer.
+Blis supports integers through the \code{int} type, which is a 32-bit two's-complement signed integer type.
+
+\subsubsection{Characters}
+
+Blis supports characters through the \code{char} type, which is an 8-bit unsigned integer type.
 
 \subsubsection{Floating Point}
 
@@ -277,13 +278,84 @@ To more easily represent position data and color data, Blis supports vectors and
 Blis also supports vectors and matrices of boolean type, denoted by \code{bvec2}, \code{bmat2x2}, etc., which are the result of the comparison operators \code{==}, \code{!=}, \code{>}, \code{<}, \code{>=}, and \code{<=} applied to floating-point vectors and matrices. The builtin functions \code{all()} and \code{any()} can be used to reduce these types to a single boolean value, so that e.g. \code{all(foo == bar)} checks that all the components of \code{foo} and \code{bar} are equal.
 
 In addition to the special operators and built-in functions, \code{vecN} types have \code{x}, \code{y}, \code{z}, and \code{w} members as appropriate as if they were normal structures, and \code{matNxM} types have \code{xx}, \code{xy}, \code{yx}, etc. Thus, the syntax to access the \code{x} component of a \code{vec4 foo} is \code{foo.x}. This also applies to the boolean vector and matrix types.
+
+\subsection{Packed Types}
+
+Oftentimes, when handling large amounts of data, we want to store a more compact representation of the data in order to reduce bandwidth and memory requirements. For example, color data is often stored using 8 bits per channel since a larger color depth wouldn't cause any noticeable increase in quality. Conceptually, each 8-bit channel represents a luminance value between 0 (minimum luminance) and 1 (maximum luminance), with 0 mapping to 0 and 255 mapping to 1. GPU's even include special support for packed formats like these, being able to sample from an image of packed data and convert it on the fly to floating point, or vice versa, quantizing a floating-point output to a packed format when writing to an image. To support this use-case, Blis has special packed types such as \code{RGBA8} which are described in the table below. These types are implicitly convertible to and from the appropriate vector type (given in the following table), but converting from the vector type to the packed type will obviously involve some loss of data. The conversion may happen on the CPU, or for operations involving the GPU, it may happen automatically through OpenGL.
+
+\begin{tabular}{| c | c | c | c |}
+\hline
+Packed Type & Vector Type & Packed to Vector & Vector to Packed \\
+\hline
+\code{RGBA8} & \code{vec4} & $\textit{val} / 255$ & $ \lfloor \text{min}(\text{max}(\textit{val}, 1), 0) \cdot 255 \rfloor$ \\
+\hline
+\code{RGB8} & \code{vec3} & $\textit{val} / 255$ & $ \lfloor \text{min}(\text{max}(\textit{val}, 1), 0) \cdot 255 \rfloor$ \\
+\hline
+\code{RG8} & \code{vec2} & $\textit{val} / 255$ & $ \lfloor \text{min}(\text{max}(\textit{val}, 1), 0) \cdot 255 \rfloor$ \\
+\hline
+\code{R8} & \code{float} & $\textit{val} / 255$ & $ \lfloor \text{min}(\text{max}(\textit{val}, 1), 0) \cdot 255 \rfloor$ \\
+\hline
+\end{tabular}
+
 \subsection{Arrays}
+
+Blis supports one and two-dimensional arrays of fixed and variable size. An array of \code{foo}'s is denoted as \code{foo[N]}, where \code{N} is an integer literal, or \code{foo[]} for a runtime-sized array. Two-dimensional runtime-sized arrays are denoted by \code{foo[,]} or \code{foo[N,]} where \code{N} is an integer literal. If the outer dimension is omitted, then it is sized at runtime as well. The reason for including two-dimensional runtime-sized arrays explicitly, rather than using \code{foo[][]}, is that \code{foo[][]} is semantically different from \code{foo[,]} --- a variable of the former type can have elements of the outer array with different sizes, while the latter is a two dimensional array where all the inner arrays must have the same size. The latter type construction, when combined with packed types, is useful for representing images whose width and height is only known at runtime; for example, a \code{loadImage()} routine would probably return a value of type \code{RGBA8[,]} or \code{RGB8[,]}.
+
+Although constant values of type \code{foo[,]} cannot be constructed directly, values of type \code{foo[N][M]} can be implicitly converted to \code{foo[,]} as described in section~\ref{conversions}. Arrays of type \code{foo[N]} can be constructed by giving a comma-separated list of \code{N} values enclosed by \code{[} and \code{]}. For example,
+
+\begin{lstlisting}
+vec3[3] bar = [vec3(0., 0., 1.), vec3(0., 1., 0.), vec3(1., 0., 0.)];
+\end{lstlisting}
+
+Note that, due to implicit conversions, the following would also work:
+
+\begin{lstlisting}
+vec3[] bar = [vec3(0., 0., 1.), vec3(0., 1., 0.), vec3(1., 0., 0.)];
+\end{lstlisting}
+
+although the resulting \code{bar} would have a different type. However, none of the elements of the list being constructed can have different types; that is, implicit type conversion doesn't happen across array members.
 
 \subsection{Structures}
 
-\subsection{Constants}
+Blis supports structures, similar to C, for storing multiple values together. Structures are declared with a syntax similar to C's, for example:
 
-\subsection{Type Conversions}
+\begin{lstlisting}
+struct {
+	vec3 a;
+	float[3] b;
+} MyStruct;
+\end{lstlisting}
+
+However, referring to the type \code{MyStruct} does not require the \code{struct} keyword:
+
+\begin{lstlisting}
+MyStruct foo;
+MyStruct makeMyStruct(int a, float[3] b);
+\end{lstlisting}
+
+This gives the compiler the flexibility to use the \code{struct} mechanism internally to create various built-in types, like \code{vec3}, \code{window}, etc.
+
+Values of a given structure type can be created by using the identifier, followed by a \code{\{}, then a comma-separated list of values and a closing \code{\}}. For example:
+
+\begin{lstlisting}
+MyStruct foo = MyStruct {
+	vec3(0., 0., 0.),
+	[0., 0., 1.]
+};
+\end{lstlisting}
+
+\subsection{Type Conversions} \label{conversions}
+
+There are a few cases in Blis where one type can be an acceptable substitute for another, namely, sized vs. unsized arrays and packed types, and the type conversion happens implicitly. Generally, it is assumed that one type, known through the rest of the rules, needs to be converted to another type which is also known beforehand; in cases where this might not be true, the rule to follow is called out explicitly. A type \textit{A} can be converted to another type \textit{B} if:
+
+\begin{itemize}
+	\item \textit{A} and \textit{B} are already the same type.
+	\item \textit{A} is a packed type and \textit{B} is its corresponding vector type, or vice versa.
+	\item \textit{A} is of type \code{\textit{C}[N][M]} or \code{\textit{C}[N,]} and \textit{B} is of type \code{\textit{D}[N,]} or \code{\textit{D}[,]} and \textit{C} can be converted to \textit{D}.
+	\item \textit{A} is of type \code{\textit{C}[N]} and \textit{B} is of type \code{\textit{D}[N]} or \code{\textit{D}[]} and \textit{C} can be converted to \textit{D}.
+\end{itemize}
+
+Note that if \textit{A} and \textit{B} are both struct types, then for them to be the same type, they must have the same name; that is, structure  equality is by name. Also, this relation is not symmetric (for example, \code{float[5]} can be converted to \code{float[]} but not vice versa), but it is transitive, and of course it is reflexive.
 
 \subsection{Operators} \label{operators}
 
@@ -292,8 +364,6 @@ In addition to the special operators and built-in functions, \code{vecN} types h
 \subsection{Builtin Functions} \label{builtins}
 
 \subsection{Buffers and Images}
-
-\subsection{Buffer and Image Formats}
 
 \subsection{Samplers}
 
