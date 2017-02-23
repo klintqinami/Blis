@@ -138,31 +138,6 @@
     %
     development of rendering software overall.
 
-\iffalse
-\section{Parts of the language and what they do}
-    \begin{itemize}
-        \item Data types: Integers (int), floating point numbers (float), single and multidimensional arrays, matrices (up to 4x4) (matrix), strings (string) -- for file I/O and writing
-        \item  Built-in cos, sin, exp, and log functions
-        \item  Loops (for and while), if and else statements
-        \item  User-defined functions
-        \item  Comments
-        \item  Buffer/Image opaque types for data on the GPU
-            \begin{itemize}
-            \item Represent data stored on the GPU
-            \item Only way to interact is through uploading/downloading to arrays
-            \end{itemize}
-        \item Shaders
-            \begin{itemize}
-            \item Functions annotated for use on the GPU
-            \item Arguments represent resources 
-            \end{itemize}
-        \item Pipeline built-in type for actual rendering
-            \begin{itemize}
-                \item  Can “bind” shaders, buffers and images to the pipeline for use as inputs/outputs
-            \end{itemize}
-    \end{itemize}
-\fi
-
 \section{Lexical Conventions}
 
 For the most part, tokens in Blis are similar to C. The main difference is the extra keywords added to support vector and matrix types. There are four kinds of tokens: identifiers, keywords, literals, and expression operators like \code{(}, \code{)}, and \code{*}. Blis is a free-format language, so comments and whitespace are ignored except to separate tokens.
@@ -195,6 +170,8 @@ The following identifiers are reserved as keywords, and may not be used as ident
 	\item \code{while}
 	\item \code{true}
 	\item \code{false}
+	\item \code{out}
+	\item \code{inout}
 	\item \code{vec2}
 	\item \code{vec3}
 	\item \code{vec4}
@@ -233,7 +210,7 @@ The following identifiers are reserved as keywords, and may not be used as ident
 
 \subsubsection{Integer Literals}
 
-Integer literals consist of a sequence of one or more of the digits 0-9. Constants must be in decimal.
+Integer literals consist of a sequence of one or more of the digits 0-9. They will be interpreted as a decimal number.
 
 \subsubsection{Floating Point Literals}
 
@@ -273,7 +250,7 @@ Blis supports booleans through the \code{bool} type. Booleans may only ever be \
 
 \subsection{Vectors and Matrices}
 
-To more easily represent position data and color data, Blis supports vectors and matrices of floating-point numbers with the \code{vec2}, \code{vec3}, and \code{vec4} builtin types, as well as \code{matNxM} where  $1 \leq \code{N} \leq 4$ and $1 \leq \code{M} \leq 4$, similar to GLSL. Blis supports the full complement of matrix-vector multiplication operations on these types as described in section~\ref{operators}, as well as component-wise multiplication and a number of built-in functions described in section~\ref{builtins}.
+To more easily represent position data and color data, Blis supports vectors and matrices of floating-point numbers with the \code{vec2}, \code{vec3}, and \code{vec4} builtin types, as well as \code{matNxM} where  $2 \leq \code{N} \leq 4$ and $2 \leq \code{M} \leq 4$, similar to GLSL. There is no \code{mat1xN} or \code{matNx1}; use the vector types instead. Blis supports the full complement of matrix-vector multiplication operations on these types as described in section~\ref{operators}, as well as component-wise multiplication and a number of built-in functions described in section~\ref{builtins}.
 
 Blis also supports vectors and matrices of boolean type, denoted by \code{bvec2}, \code{bmat2x2}, etc., which are the result of the comparison operators \code{==}, \code{!=}, \code{>}, \code{<}, \code{>=}, and \code{<=} applied to floating-point vectors and matrices. The builtin functions \code{all()} and \code{any()} can be used to reduce these types to a single boolean value, so that e.g. \code{all(foo == bar)} checks that all the components of \code{foo} and \code{bar} are equal.
 
@@ -301,7 +278,7 @@ Packed Type & Vector Type & Packed to Vector & Vector to Packed \\
 
 \subsection{Arrays}
 
-Blis supports one and two-dimensional arrays of fixed and variable size. An array of \code{foo}'s is denoted as \code{foo[N]}, where \code{N} is an integer literal, or \code{foo[]} for a runtime-sized array. Two-dimensional runtime-sized arrays are denoted by \code{foo[,]} or \code{foo[N,]} where \code{N} is an integer literal. If the outer dimension is omitted, then it is sized at runtime as well. The reason for including two-dimensional runtime-sized arrays explicitly, rather than using \code{foo[][]}, is that \code{foo[][]} is semantically different from \code{foo[,]} --- a variable of the former type can have elements of the outer array with different sizes, while the latter is a two dimensional array where all the inner arrays must have the same size. The latter type construction, when combined with packed types, is useful for representing images whose width and height are only known at runtime; for example, a \code{loadImage()} routine would probably return a value of type \code{RGBA8[,]} or \code{RGB8[,]}.
+Blis supports one and two-dimensional arrays of fixed and variable size. An array of \code{foo}'s is denoted as \code{foo[N]}, where \code{N} is an integer literal, or \code{foo[]} for a runtime-sized array. Arrays nest left-to-right, so that \code{int[3][2]} is an array of size 3 of an array of size 2 of integers. Two-dimensional runtime-sized arrays are denoted by \code{foo[,]} or \code{foo[N,]} where \code{N} is an integer literal. If the outer dimension is omitted, then it is sized at runtime as well. The reason for including two-dimensional runtime-sized arrays explicitly, rather than using \code{foo[][]}, is that \code{foo[][]} is semantically different from \code{foo[,]} --- a variable of the former type can have inner arrays with different sizes, while the latter is a two dimensional array where all the inner arrays must have the same size. The latter type construction, when combined with packed types, is useful for representing images whose width and height are only known at runtime; for example, a \code{loadImage()} routine would probably return a value of type \code{RGBA8[,]} or \code{RGB8[,]}.
 
 Although constant values of type \code{foo[,]} cannot be constructed directly, values of type \code{foo[N][M]} can be implicitly converted to \code{foo[,]} as described in section~\ref{conversions}. Arrays of type \code{foo[N]} can be constructed by giving a comma-separated list of \code{N} values enclosed by \code{[} and \code{]}. For example,
 
@@ -315,7 +292,7 @@ Note that, due to implicit conversions, the following would also work:
 vec3[] bar = [vec3(0., 0., 1.), vec3(0., 1., 0.), vec3(1., 0., 0.)];
 \end{lstlisting}
 
-although the resulting \code{bar} would have a different type. However, none of the elements of the list being constructed can have different types; that is, implicit type conversion doesn't happen across array members.
+although the resulting \code{bar} would have a different type: variable-sized array instead of fixed-size array. However, none of the elements of the list being constructed can have different types; that is, implicit type conversion doesn't happen across array members. For example, it is illegal to mix \code{vec4} and \code{RGBA8} types within a single array.
 
 \subsection{Structures}
 
@@ -337,14 +314,16 @@ MyStruct makeMyStruct(int a, float[3] b);
 
 This gives the compiler the flexibility to use the \code{struct} mechanism internally to create various built-in types, like \code{vec3}, \code{window}, etc.
 
-Values of a given structure type can be created by using the identifier, followed by a \code{\{}, then a comma-separated list of values and a closing \code{\}}. For example:
+Declaring a structure type implicitly creates a new function with the types of the members as arguments which creates an instance of the structure, similar to GLSL. For example, you could create an instance of \code{MyStruct} like:
 
 \begin{lstlisting}
-MyStruct foo = MyStruct {
+MyStruct foo = MyStruct(
 	vec3(0., 0., 0.),
 	[0., 0., 1.]
-};
+);
 \end{lstlisting}
+
+Thus, structures and functions share the same namespace.
 
 \subsection{Type Conversions} \label{conversions}
 
@@ -404,71 +383,207 @@ Precendence & Operator Class & Operators & Associativity \\ \hline
    &                     & \code{|=} & \\ \hline
 17 & Sequencing & \code{,} & Left to Right \\ \hline
 
-
-
-
-
 \end{tabular}
 
-\subsection{Functions}
+\vspace{3mm}
 
-\subsection{Builtin Functions} \label{builtins}
+The in-place operators \code{a OP= b} are defined to be equivalent to \code{a = a OP b}. Evaluation proceeds left to right, and any side effects (for example, incrementing the lvalue by \code{++}) are evaluated immediately before returning the value.
 
-\subsection{Buffers and Images}
+\subsubsection{Vectorized Operators} \label{vectorized}
 
-\subsection{Samplers}
+In addition to their normal operation on floating-point and boolean types, the following arithmetic operator classes can operate on vectors in a per-component manner:
 
-\subsection{Framebuffers}
+\begin{itemize}
+	\item Postfix Increment/Decrement
+	\item Prefix Increment/Decrement
+	\item Unary Operators
+	\item Multiplicative Operators
+	\item Additive Binary Operators
+	\item Relational
+	\item Logical And
+	\item Logical Exclusive Or
+\end{itemize}
 
-\subsection{Pipelines}
+That is, for example, if \code{a OP b} can take an \code{a} of type \code{float} and \code{b} of type \code{bool} and produce a result of type \code{float}, then it can also take an \code{a} of type \code{vec4} and \code{b} of type \code{bvec4} to produce a result of type \code{vec4}, where \code{result.x = a.x OP b.x}, \code{result.y = a.y OP b.y}, etc. In addition, if some of the inputs are of scalar types, then they will automatically be replicated to create a vector of the required size. Thus, the following is legal:
 
-\section{Formal Grammar}
+\begin{lstlisting}
+vec3(1.0, 2.0, 3.0) * 2.0 // returns vec3(2.0, 4.0, 6.0)
+\end{lstlisting}
 
-\section{Sample Code}
+but the following is not:
+
+\begin{lstlisting}
+vec3(1.0, 2.0, 3.0) * vec2(1.0, 2.0)
+\end{lstlisting}
+
+In addition, all of the above operators except for \code{*} can operate per-component on matrices. \code{*} only works on matrices of floating-point type, and denotes linear algebraic matrix-matrix or matrix-vector multiplication. Multiplying a vector by a matrix is not permitted.
+
+For any of these operators, operands of packed type are immediately expanded to their corresponding expanded type before considering whether the operation is allowed or actually doing the operation.
+
+\subsubsection{Equality}
+
+The equality operators (\code{==} and \code{!=}) are structural in Blis, meaning that they recursively compare the elements of structures and arrays. The rule for whether two values \textit{A} and \textit{B} can be compared is as follows:
+
+\begin{itemize}
+	\item If \textit{A} and \textit{B} are vectors or matrices, then the comparison is done per-component with the implicit replication described in section~\ref{vectorized}, and returns a boolean vector of the same size as the original vector type.
+	\item If \textit{A} is a packed type and \textit{B} is its corresponding vector type, or vice versa, then the vector type is truncated to the packed type and then compared component-wise. If the non-packed type is a scalar, it is also automatically replicated.
+	\item If \textit{A} and \textit{B} are both packed types, then they are compared per-component. \textit{A} and \textit{B} must both be the same packed type for the equality to succeed.
+	\item \textit{A} is of type \code{\textit{C}[N][M]} or \code{\textit{C}[N,]} and \textit{B} is of type \code{\textit{D}[N,]} or \code{\textit{D}[,]}, then each value of type \textit{C} is compared with the corresponding value of type \textit{D} and the result is combined (or'd for \code{==} and anded for \code{!=}).
+	\item If \textit{A} is of type \code{\textit{C}[N]} and \textit{B} is of type \code{\textit{D}[N]} or \code{\textit{D}[]}, then each value of type \textit{C} is compared with the corresponding value of type \textit{D} and the result is combined.
+	\item If \textit{A} and \textit{B} are runtime-sized arrays, and they are both one-dimensional or two-dimensional, then the elements of \textit{A} and \textit{B} are compared and combined, except when the sizes do not match, in which case the comparison returns ``not equal.''
+	\item If \textit{A} and \textit{B} are of the same structure type, then \textit{A} and \textit{B} are compared member-by-member and the result combined appropriately. If one of the comparisons returns a boolean vector, then the components of the vector are combined to produce a single boolean as well. Therefore, the return type of structure comparisons is always a single boolean.
+\end{itemize}
+
+Any situation which does not fall under one of these cases results in a type error.
+
+\subsubsection{Lvalues and Assignment}
+
+Expressions on the left-hand side of an \code{=} must be an \textit{lvalue}, which must be either an identifier or one of the following:
+
+\begin{itemize}
+    \item A member access using the \code{.} operator where the left-hand side is an lvalue.
+    \item An array dereference using the \code{[} \code{]} operators where the left-hand side is an lvalue.
+    \item An lvalue within parentheses.
+\end{itemize}
+
+When assigning a value, the right-hand side must be implicitly convertible to the left-hand side as defined in section~\ref{conversions}.
+
+\subsection{Statements and Control Flow}
+
+A statement in Blis can be:
+
+\begin{itemize}
+    \item A value followed by a semicolon.
+    \item A variable declaration, which consists of the type, followed by a comma-separated list of identifiers (names), each optionally followed by \code{=} and then an expression initializing the variable which must have a type implicitly convertible to the type of the variable.
+    \item A \textit{block} of statements surrounded by \code{\{} \code{\}}.
+    \item A \code{break} followed by a semicolon.
+    \item A \code{continue} followed by a semicolon.
+    \item A \code{return} followed by an optional value and a semicolon.
+    \item A sequence of statements enclosed in braces.
+    \item An \code{if} statement with optional else clause.
+    \item A \code{for} loop.
+    \item A \code{while} loop.
+\end{itemize}
+
+The syntax and semantics of \code{if}, \code{while}, and \code{for}, \code{break}, \code{continue}, and \code{return} are the same as C. \code{return}, \code{break}, and \code{continue} must be the last statement in any block. When the function has a non-\code{void} return type, the type of the expression in the \code{return} must be implicitly convertible to the function return type as defined in section~\ref{conversions}.
+
+\subsection{Functions and Global Variables}
+
+Programs in Blis consist of forward function declarations, function definitions, and global variable declarations. Global variable declarations are the same as local variable declarations as defined in the last section. Functions in Blis are declared and defined as they are in C:
+
+\begin{lstlisting}
+int my_cool_function(int a, vec3[3] b);
+
+// ...
+
+// formal parameters must match
+int my_cool_function(int a, vec3[3] b) {
+    // ...
+    return 42;
+}
+\end{lstlisting}
+
+The body of a function consists of a block of statements as defined in the previous section.
+
+In addition, formal parameters may have an optional \code{out} or \code{inout} specifiers, similar to GLSL. At most one of \code{in} or \code{inout} can be added before the type of the formal parameter. Function parameters are always pass-by-value, but if \code{out} is specified, the reverse from the default happens: instead of the actual parameter being copied into the formal parameter at the beginning of the function, the formal parameter has an undefined value at the beginning of the function, and is copied to the actual parameter when returning from the function. \code{inout} is like \code{out}, except that the formal parameter is also initialized to the actual parameter at the beginning of the function, like normal parameters; in some sense, an \code{inout} parameter is a combination of the \code{out} and normal parameters. We follow GLSL in specifying that the order that these copies happen is undefined. In some sense, the behavior of \code{out} and \code{inout} is similar to pass-by-reference in that updates inside the function become visible outside, except that aliasing is not supported and so passing the same argument twice produces different results from what you would expect. For example, in this snippet:
+
+\begin{lstlisting}
+void my_cool_function(inout int a, inout int b) {
+    a = 2;
+    // b still has value 1
+    b = 3;
+}
+
+// ...
+
+int c = 1;
+my_cool_function(c, c);
+// what is c now?
+\end{lstlisting}
+
+since the order in which \code{a} and \code{b} are copied to \code{c} after calling \code{my\_cool\_function} is undefined, \code{c} can be either 2 or 3 at the end.
+
+\subsection{Names and Scope}
+
+Similar to C, Blis has support for nested scopes. Each block of statements defines a new inner scope, which contains any bindings from the outer scope which aren't hidden by another binding from the inner scope. Variables and functions cannot be referenced before they are declared. When multiple variables are declared at the same time in a single statement, the first variable is visible when initializing the second, the second is available when initializing the first, and so on. Blis does not support separate linking, so there are no separate storage classes beyond local vs. global variables.
+
+\subsection{GPU specifics}
+
+The GPU-specific objects in Blis are \textit{shaders}, \textit{buffers}, \textit{images}, \textit{samplers}, \textit{textures}, and \textit{framebuffers}. There are two types of shaders, \textit{vertex shaders} and \textit{fragment shaders}. Vertex shaders run first, consuming buffers of \code{vertex attributes} to produce triangles that are then split into \textit{fragments} that are given a color by the fragment shader which is written out to the framebuffer which collects the final result. Together, the whole process is encapsulated in the \textit{pipeline}, which includes the vertex shader, the fragment shader, and struct members which let users bind resources like samplers and framebuffers which may be used in the process. Images and buffers are opaque structures which represent memory local to the GPU arranged in a one-dimensional or two-dimensional fashion. Images can either be bound to framebuffers or textures. Textures and samplers are the opposite of framebuffers; they are 2D arrays that can only be read by the shader. A sampler is a fixed-function piece of hardware which knows how to sample a texture at an arbitrary floating-point location by interpolating between nearby pixels in the texture using one of a few different interpolation modes. Each texture may contain one or more images, which represent different \textit{levels of detail} or \textit{LOD's}.
+
+\subsubsection{Shader Entrypoints}
+
+To tell Blis that a particular function is meant to be compiled to a \textit{shader} that executes on the GPU, it can be given a \code{@fragment} or \code{@vertex} annotations after the declaration but before the function body. Shader entrypoints are similar to normal functions, and they can call the same functions that normal functions can, except there are a few restrictions on shader entrypoints and any functions called by them:
+
+\begin{itemize}
+    \item Recursion is disallowed. That is, the callgraph of functions called by each shader entrypoint must not be cyclic.
+    \item Runtime-sized arrays are not allowed.
+    \item Any GPU-specific objects like samplers, images, etc. cannot be created.
+    \item Global variables, as long as they do not contain any GPU-specific types, can be read, but they cannot be written.
+\end{itemize}
+
+%\subsubsection{Buffers and Images}
+
+%\subsubsection{Textures}
+
+%\subsubsection{Samplers}
+
+%\subsubsection{Framebuffers}
+
+%\subsubsection{Pipelines}
+
+%\subsection{Builtin Functions} \label{builtins}
+
+%\section{Formal Grammar}
+
+\section{Complete Sample Program}
 
 \begin{lstlisting}
 /* Draws a spinning triangle */
 
-var transform: mat3;
+mat3 transform;
 
-fn generate_transform(angle: float) {
+void generate_transform(float angle) {
     transform = mat3(cos(angle), -sin(angle), 0,
                sin(angle), cos(angle), 0,
                0, 0, 1);
 }
 
+/* The vertex shader is responsible for transforming
+ * triangle vertices into screen space. "color" and
+ * "pos" are per-vertex inputs, called "attributes" in
+ * OpenGL. "color" is a per-vertex output that gets
+ * interpolated across the triangle, called a "varying"
+ * in OpenGL, while "position" is a builtin that 
+ * determines where the triangle is rendered.
+ */
+void vertex(vec3 color, vec3 pos, out vec4 color_varying, out vec4 position) @vertex {
+    /* Note that here, we're pulling in "transform", which was
+     * declared as a global variable outside the pipeline. This
+     * is a simple way of passing data that doesn't change per-vertex
+     * to the shader. In OpenGL, this would require creating a
+     * uniform, binding it, and updating it per-draw if it changes.
+     */
+    color_varying = vec4(color, /* alpha */ 1),
+   	position = vec4(transform * pos, /* w coordinate */ 1);
+}
+
+/* The fragment shader is responsible for determining
+ * the color of the "fragment" (potential pixel).
+ * "color_varying" is a varying input, matched by name with
+ * "color_varying" from the vertex shader.
+ */
+void fragment(vec4 color_varying, out vec4 framebuffer) @fragment {
+    framebuffer = color_varying;
+}
+
 /* This creates a pipeline, which includes everything necessary
  * to draw some triangles to the framebuffer(s).
  */
-Pipeline {
-    /* The vertex shader is responsible for transforming
-     * triangle vertices into screen space. "color" and
-     * "pos" are per-vertex inputs, called "attributes" in
-     * OpenGL. "color" is a per-vertex output that gets
-     * interpolated across the triangle, called a "varying"
-     * in OpenGL, while "position" is a builtin that 
-     * determines where the triangle is rendered.
-     */
-    vertex_shader: fn @vertex (color: vec3, pos: vec3) ->
-    	(color: vec4, position: vec4) {
-    	/* Note that here, we're pulling in "transform", which was
-    	 * declared as a global variable outside the pipeline. This
-    	 * is a simple way of passing data that doesn't change per-vertex
-    	 * to the shader. In OpenGL, this would require creating a
-    	 * uniform, binding it, and updating it per-draw if it changes.
-    	 */
-        return (vec4(color, /* alpha */ 1),
-   				 vec4(transform * pos, /* w coordinate */ 1));
-    },
-
-    /* The fragment shader is responsible for determining
-     * the color of the "fragment" (potential pixel).
-     * "color" is a varying input, matched by name with
-     * "color" from the vertex shader.
-     */
-    fragment_shader: fn @fragment (color: vec4) -> (framebuffer: vec4) {
-        return color;
-    },
+pipeline {
+    /* tell the pipeline what vertex and fragment shaders to use */
+    @vertex vertex,
+    @fragment fragment,
     
     /* The "buffer" type is a way to represent data stored on the GPU.
      * Buffers cannot be accessed directly, they can only be uploaded
@@ -480,10 +595,10 @@ Pipeline {
      * that assigning to this member will bind the buffer to the
      * Vertex Array Object (VAO) of the vertex shader in OpenGL terms.
      */
-     color: Buffer<vec3>,
+     Buffer<vec3> color,
      
      /* similar to the above */
-     pos: Buffer<vec3>,
+     Buffer<vec3> pos,
     
     /* The framebuffer is what accumulates the final
      * color and depth. RGBA8 indicates that the pixels should
@@ -492,34 +607,40 @@ Pipeline {
      * type.
      */
     framebuffer: Framebuffer<RGBA8>
-} my_pipeline;
+} MyPipeline;
 
-/* transfer data from the CPU to the GPU */
-Buffer<vec3> color, pos;
-color.upload([vec3(1.0, 0.0, 0.0),
-			   vec3(0.0, 1.0, 0.0),
-			   vec3(0.0, 0.0, 1.0)]);
-pos.upload([vec3(-1.0, -1.0, 0.0),
-			 vec3(1.0, -1.0, 0.0),
-			 vec3(0.0,  1.0, 0.0)];
-/* prepare the pipeline */
-my_pipeline.color = color;
-my_pipeline.pos = pos;
+int main() {
+    MyPipeline my_pipeline;
+    /* transfer data from the CPU to the GPU */
+    Buffer<vec3> color, pos;
+    color.upload([vec3(1.0, 0.0, 0.0),
+    			   vec3(0.0, 1.0, 0.0),
+    			   vec3(0.0, 0.0, 1.0)]);
+    pos.upload([vec3(-1.0, -1.0, 0.0),
+    			 vec3(1.0, -1.0, 0.0),
+    			 vec3(0.0,  1.0, 0.0)];
+    			 
+    /* prepare the pipeline */
+    my_pipeline.color = color;
+    my_pipeline.pos = pos;
 
-/* this creates a window and the framebuffer for it */
-Window my_window = make_window(1024, 768, "My Window");
-
-/* tell the pipeline to draw to the window's framebuffer */
-my_pipeline.framebuffer = my_window.framebuffer;
-
-/* main loop */
-var angle: float = 0;
-do {
-    angle += 1.0;
-    generate_transform(angle);
-    draw(my_pipeline);
-    swap_buffers(window);
-} while (!should_close(window));
+    /* this creates a window and the framebuffer for it */
+    Window my_window = Window(1024, 768, "My Window");
+    
+    /* tell the pipeline to draw to the window's framebuffer */
+    my_pipeline.framebuffer = my_window.framebuffer;
+    
+    /* main loop */
+    float angle = 0;
+    do {
+        angle += 1.0;
+        generate_transform(angle);
+        draw(my_pipeline);
+        swap_buffers(window);
+    } while (!should_close(window));
+    
+    return 0;
+}
 
 \end{lstlisting}
 
