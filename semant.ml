@@ -132,13 +132,18 @@ let check (globals, functions) =
      then raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
      else () in
 
+    let check_in_loop in_loop = if in_loop then () else
+      raise (Failure ("break/continue must be inside a loop")) in
+
     (* Verify a statement or throw an exception *)
-    let rec stmt = function
+    let rec stmt in_loop = function
 	Block sl -> let rec check_block = function
-           [Return _ as s] -> stmt s
+           [Return _ as s] -> stmt in_loop s
          | Return _ :: _ -> raise (Failure "nothing may follow a return")
+         | Break :: _ -> raise (Failure "nothing may follow a break")
+         | Continue :: _ -> raise (Failure "nothing may follow a continue")
          | Block sl :: ss -> check_block (sl @ ss)
-         | s :: ss -> stmt s ; check_block ss
+         | s :: ss -> stmt in_loop s ; check_block ss
          | [] -> ()
         in check_block sl
       | Expr e -> ignore (expr e)
@@ -146,13 +151,15 @@ let check (globals, functions) =
          raise (Failure ("return gives " ^ string_of_typ t ^ " expected " ^
                          string_of_typ func.typ ^ " in " ^ string_of_expr e))
            
-      | If(p, b1, b2) -> check_bool_expr p; stmt b1; stmt b2
+      | If(p, b1, b2) -> check_bool_expr p; stmt in_loop b1; stmt in_loop b2
       | For(e1, e2, e3, st) -> ignore (expr e1); check_bool_expr e2;
-                               ignore (expr e3); stmt st
-      | While(p, s) -> check_bool_expr p; stmt s
+                               ignore (expr e3); stmt true st
+      | While(p, s) -> check_bool_expr p; stmt true s
+      | Break -> check_in_loop in_loop
+      | Continue -> check_in_loop in_loop
     in
 
-    stmt (Block func.body)
+    stmt false (Block func.body)
    
   in
   List.iter check_function functions

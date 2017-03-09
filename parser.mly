@@ -7,7 +7,8 @@ open Ast
 %token SEMI LPAREN RPAREN LBRACE RBRACE COMMA
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
-%token RETURN IF ELSE FOR WHILE INT BOOL VOID
+%token RETURN BREAK CONTINUE IF ELSE FOR WHILE
+%token INT BOOL VOID
 %token <int> LITERAL
 %token <string> ID
 %token EOF
@@ -72,6 +73,8 @@ stmt:
     expr SEMI { Expr $1 }
   | RETURN SEMI { Return Noexpr }
   | RETURN expr SEMI { Return $2 }
+  | BREAK SEMI { Break }
+  | CONTINUE SEMI { Continue }
   | LBRACE stmt_list RBRACE { Block(List.rev $2) }
   | IF LPAREN expr RPAREN stmt %prec NOELSE { If($3, $5, Block([])) }
   | IF LPAREN expr RPAREN stmt ELSE stmt    { If($3, $5, $7) }

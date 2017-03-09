@@ -130,48 +130,79 @@ let translate (globals, functions) =
 	
     (* Build the code for the given statement; return the builder for
        the statement's successor *)
-    let rec stmt builder = function
-	A.Block sl -> List.fold_left stmt builder sl
+    let rec stmt break_bb continue_bb builder = function
+	A.Block sl -> List.fold_left (stmt break_bb continue_bb) builder sl
       | A.Expr e -> ignore (expr builder e); builder
       | A.Return e -> ignore (match fdecl.A.typ with
 	  A.Void -> L.build_ret_void builder
 	| _ -> L.build_ret (expr builder e) builder); builder
+      | A.Break -> ignore (L.build_br break_bb builder); builder
+      | A.Continue -> ignore (L.build_br continue_bb builder); builder
       | A.If (predicate, then_stmt, else_stmt) ->
          let bool_val = expr builder predicate in
 	 let merge_bb = L.append_block context "merge" the_function in
 
 	 let then_bb = L.append_block context "then" the_function in
-	 add_terminal (stmt (L.builder_at_end context then_bb) then_stmt)
-	   (L.build_br merge_bb);
+	 add_terminal
+          (stmt break_bb continue_bb (L.builder_at_end context then_bb) then_stmt)
+	  (L.build_br merge_bb);
 
 	 let else_bb = L.append_block context "else" the_function in
-	 add_terminal (stmt (L.builder_at_end context else_bb) else_stmt)
-	   (L.build_br merge_bb);
+	 add_terminal
+          (stmt break_bb continue_bb (L.builder_at_end context else_bb) else_stmt)
+	  (L.build_br merge_bb);
 
 	 ignore (L.build_cond_br bool_val then_bb else_bb builder);
 	 L.builder_at_end context merge_bb
 
       | A.While (predicate, body) ->
 	  let pred_bb = L.append_block context "while" the_function in
+	  let body_bb = L.append_block context "while_body" the_function in
+	  let merge_bb = L.append_block context "merge" the_function in
+
 	  ignore (L.build_br pred_bb builder);
 
-	  let body_bb = L.append_block context "while_body" the_function in
-	  add_terminal (stmt (L.builder_at_end context body_bb) body)
+	  add_terminal
+            (stmt merge_bb pred_bb (L.builder_at_end context body_bb) body)
 	    (L.build_br pred_bb);
 
 	  let pred_builder = L.builder_at_end context pred_bb in
 	  let bool_val = expr pred_builder predicate in
-
-	  let merge_bb = L.append_block context "merge" the_function in
 	  ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
+
 	  L.builder_at_end context merge_bb
 
-      | A.For (e1, e2, e3, body) -> stmt builder
-	    ( A.Block [A.Expr e1 ; A.While (e2, A.Block [body ; A.Expr e3]) ] )
+      | A.For (e1, e2, e3, body) -> 
+          ignore (expr builder e1);
+
+          let pred_bb = L.append_block context "for" the_function in
+          let body_bb = L.append_block context "for_body" the_function in
+          let final_bb = L.append_block context "for_end" the_function in
+          let merge_bb = L.append_block context "for_merge" the_function in
+
+          ignore (L.build_br pred_bb builder);
+
+          add_terminal
+            (stmt merge_bb final_bb (L.builder_at_end context body_bb) body)
+            (L.build_br final_bb);
+
+          let pred_builder = L.builder_at_end context pred_bb in
+          let bool_val = expr pred_builder e2 in
+          ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
+
+          let final_builder = L.builder_at_end context final_bb in
+          ignore (expr final_builder e3);
+          ignore (L.build_br pred_bb final_builder);
+
+          L.builder_at_end context merge_bb
+
+
     in
 
     (* Build the code for each statement in the function *)
-    let builder = stmt builder (A.Block fdecl.A.body) in
+    let dummy_bb = L.append_block context "dummy" the_function in
+    ignore (L.build_unreachable (L.builder_at_end context dummy_bb));
+    let builder = stmt dummy_bb dummy_bb builder (A.Block fdecl.A.body) in
 
     (* Add a return if the last block falls off the end *)
     add_terminal builder (match fdecl.A.typ with
