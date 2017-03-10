@@ -8,8 +8,9 @@ open Ast
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token INT BOOL VOID
-%token <int> LITERAL
+%token INT FLOAT BOOL VOID
+%token <int> INT_LITERAL
+%token <float> FLOAT_LITERAL
 %token <string> ID
 %token EOF
 
@@ -55,6 +56,7 @@ formal_list:
 
 typ:
     INT { Int }
+  | FLOAT { Float }
   | BOOL { Bool }
   | VOID { Void }
 
@@ -87,7 +89,8 @@ expr_opt:
   | expr          { $1 }
 
 expr:
-    LITERAL          { Literal($1) }
+    INT_LITERAL      { IntLit($1) }
+  | FLOAT_LITERAL    { FloatLit($1) }
   | TRUE             { BoolLit(true) }
   | FALSE            { BoolLit(false) }
   | ID               { Id($1) }

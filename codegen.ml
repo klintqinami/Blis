@@ -24,10 +24,13 @@ let translate (globals, functions) =
   and i32_t  = L.i32_type  context
   and i8_t   = L.i8_type   context
   and i1_t   = L.i1_type   context
+  and f32_t  = L.float_type context
+  and f64_t  = L.double_type context
   and void_t = L.void_type context in
 
   let ltype_of_typ = function
       A.Int -> i32_t
+    | A.Float -> f32_t
     | A.Bool -> i1_t
     | A.Void -> void_t in
 
@@ -58,6 +61,7 @@ let translate (globals, functions) =
     let builder = L.builder_at_end context (L.entry_block the_function) in
 
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
+    let float_format_str = L.build_global_stringptr "%f\n" "fmt" builder in
     
     (* Construct the function's "locals": formal arguments and locally
        declared variables.  Allocate each on the stack, initialize their
@@ -83,7 +87,8 @@ let translate (globals, functions) =
 
     (* Construct code for an expression; return its value *)
     let rec expr builder = function
-	SA.SLiteral i -> L.const_int i32_t i
+	SA.SIntLit i -> L.const_int i32_t i
+      | SA.SFloatLit f -> L.const_float f32_t f
       | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
       | SA.SNoexpr -> L.const_int i32_t 0
       | SA.SId s -> L.build_load (lookup s) s builder
@@ -101,6 +106,16 @@ let translate (globals, functions) =
 	  | SA.ILeq     -> L.build_icmp L.Icmp.Sle
 	  | SA.IGreater -> L.build_icmp L.Icmp.Sgt
 	  | SA.IGeq     -> L.build_icmp L.Icmp.Sge
+          | SA.FAdd     -> L.build_fadd
+          | SA.FSub     -> L.build_fsub
+          | SA.FMult    -> L.build_fmul
+          | SA.FDiv     -> L.build_fdiv
+	  | SA.FEqual   -> L.build_fcmp L.Fcmp.Oeq
+	  | SA.FNeq     -> L.build_fcmp L.Fcmp.One
+	  | SA.FLess    -> L.build_fcmp L.Fcmp.Olt
+	  | SA.FLeq     -> L.build_fcmp L.Fcmp.Ole
+	  | SA.FGreater -> L.build_fcmp L.Fcmp.Ogt
+	  | SA.FGeq     -> L.build_fcmp L.Fcmp.Oge
 	  | SA.BAnd     -> L.build_and
 	  | SA.BOr      -> L.build_or
 	  | SA.BEqual   -> L.build_icmp L.Icmp.Eq
@@ -110,11 +125,17 @@ let translate (globals, functions) =
 	  let e' = expr builder e in
 	  (match op with
 	    SA.INeg     -> L.build_neg
+	  | SA.FNeg     -> L.build_fneg
           | SA.BNot     -> L.build_not) e' "tmp" builder
       | SA.SAssign (s, e) -> let e' = expr builder e in
 	                   ignore (L.build_store e' (lookup s) builder); e'
       | SA.SCall ("print", [e]) | SA.SCall ("printb", [e]) ->
 	  L.build_call printf_func [| int_format_str ; (expr builder e) |]
+	    "printf" builder
+      | SA.SCall ("printf", [e]) ->
+	  L.build_call printf_func
+            [| float_format_str ;
+               L.build_fpext (expr builder e) f64_t "tmp" builder |]
 	    "printf" builder
       | SA.SCall (f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in

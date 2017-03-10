@@ -4,12 +4,15 @@ open Ast
 
 type sop = IAdd | ISub | IMult | IDiv
          | IEqual | INeq | ILess | ILeq | IGreater | IGeq
+         | FAdd | FSub | FMult | FDiv
+         | FEqual | FNeq | FLess | FLeq | FGreater | FGeq
          | BAnd | BOr | BEqual | BNeq
 
-type suop = INeg | BNot
+type suop = INeg | FNeg | BNot
 
 type sexpr =
-    SLiteral of int
+    SIntLit of int
+  | SFloatLit of float
   | SBoolLit of bool
   | SId of string
   | SBinop of sexpr * sop * sexpr
@@ -41,25 +44,26 @@ type sprogram = bind list * sfunc_decl list
 (* Pretty-printing functions *)
 
 let string_of_sop = function
-    IAdd -> "+"
-  | ISub -> "-"
-  | IMult -> "*"
-  | IDiv -> "/"
-  | IEqual | BEqual -> "=="
-  | INeq | BNeq -> "!="
-  | ILess -> "<"
-  | ILeq -> "<="
-  | IGreater -> ">"
-  | IGeq -> ">="
+    IAdd | FAdd -> "+"
+  | ISub | FSub -> "-"
+  | IMult | FMult -> "*"
+  | IDiv | FDiv -> "/"
+  | IEqual | BEqual | FEqual -> "=="
+  | INeq | BNeq | FNeq -> "!="
+  | ILess | FLess -> "<"
+  | ILeq | FLeq -> "<="
+  | IGreater | FGreater -> ">"
+  | IGeq | FGeq -> ">="
   | BAnd -> "&&"
   | BOr -> "||"
 
 let string_of_suop = function
-    INeg -> "-"
+    INeg | FNeg -> "-"
   | BNot -> "!"
 
 let rec string_of_sexpr = function
-    SLiteral(l) -> string_of_int l
+    SIntLit(l) -> string_of_int l
+  | SFloatLit(l) -> string_of_float l
   | SBoolLit(true) -> "true"
   | SBoolLit(false) -> "false"
   | SId(s) -> s

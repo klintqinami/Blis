@@ -48,15 +48,17 @@ let check (globals, functions) =
     (List.map (fun fd -> fd.fname) functions);
 
   (* Function declaration for a named function *)
-  let built_in_decls =  StringMap.add "print"
+  let built_in_decls =  [
      { typ = Void; fname = "print"; formals = [(Int, "x")];
-       locals = []; body = [] } (StringMap.singleton "printb"
+       locals = []; body = [] };
      { typ = Void; fname = "printb"; formals = [(Bool, "x")];
-       locals = []; body = [] })
+       locals = []; body = [] };
+     { typ = Void; fname = "printf"; formals = [(Float, "x")];
+       locals = []; body = [] }]
    in
      
   let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
-                         built_in_decls functions
+                         StringMap.empty (built_in_decls @ functions)
   in
 
   let function_decl s = try StringMap.find s function_decls
@@ -91,7 +93,8 @@ let check (globals, functions) =
 
     (* Return the type of an expression and new expression or throw an exception *)
     let rec expr = function
-	Literal(l) -> (Int, SLiteral(l))
+	IntLit(l) -> (Int, SIntLit(l))
+      | FloatLit(l) -> (Float, SFloatLit(l))
       | BoolLit(l) -> (Bool, SBoolLit(l))
       | Id s -> (type_of_identifier s, SId(s))
       | Binop(e1, op, e2) as e -> let t1, e1 = expr e1 and t2, e2 = expr e2 in
@@ -102,6 +105,16 @@ let check (globals, functions) =
           | Div when t1 = Int && t2 = Int -> (Int, IDiv)
           | Equal when t1 = Int && t2 = Int -> (Bool, IEqual)
           | Neq when t1 = Int && t2 = Int -> (Bool, INeq)
+          | Add when t1 = Float && t2 = Float -> (Float, FAdd)
+          | Sub when t1 = Float && t2 = Float -> (Float, FSub)
+          | Mult when t1 = Float && t2 = Float -> (Float, FMult)
+          | Div when t1 = Float && t2 = Float -> (Float, FDiv)
+          | Equal when t1 = Float && t2 = Float -> (Bool, FEqual)
+          | Neq when t1 = Float && t2 = Float -> (Bool, FNeq)
+          | Less when t1 = Float && t2 = Float -> (Bool, FLess)
+          | Leq when t1 = Float && t2 = Float -> (Bool, FLeq)
+          | Greater when t1 = Float && t2 = Float -> (Bool, FGreater)
+          | Geq when t1 = Float && t2 = Float -> (Bool, FGeq)
           | Equal when t1 = Bool && t2 = Bool -> (Bool, BEqual)
           | Neq when t1 = Bool && t2 = Bool -> (Bool, BNeq)
           | Less when t1 = Int && t2 = Int -> (Bool, ILess)
@@ -118,6 +131,7 @@ let check (globals, functions) =
       | Unop(op, e) as ex -> let t, e = expr e in
 	 (match op with
 	   Neg when t = Int -> (Int, SUnop(INeg, e))
+	 | Neg when t = Float -> (Int, SUnop(FNeg, e))
 	 | Not when t = Bool -> (Bool, SUnop(BNot, e))
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
