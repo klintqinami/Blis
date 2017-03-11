@@ -11,10 +11,10 @@ let _ =
   else Compile in
   let lexbuf = Lexing.from_channel stdin in
   let ast = Parser.program Scanner.token lexbuf in
-  Semant.check ast;
+  let sast = Semant.check ast in
   match action with
-    Ast -> print_string (Ast.string_of_program ast)
-  | LLVM_IR -> print_string (Llvm.string_of_llmodule (Codegen.translate ast))
-  | Compile -> let m = Codegen.translate ast in
+    Ast -> print_string (Sast.string_of_sprogram sast)
+  | LLVM_IR -> print_string (Llvm.string_of_llmodule (Codegen.translate sast))
+  | Compile -> let m = Codegen.translate sast in
     Llvm_analysis.assert_valid_module m;
     print_string (Llvm.string_of_llmodule m)

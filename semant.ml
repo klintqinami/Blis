@@ -1,10 +1,11 @@
 (* Semantic checking for the MicroC compiler *)
 
 open Ast
+open Sast
 
 module StringMap = Map.Make(String)
 
-(* Semantic checking of a program. Returns void if successful,
+(* Semantic checking of a program. Returns the SAST if successful,
    throws an exception if something is wrong.
 
    Check each global variable, then check each function *)
@@ -88,49 +89,63 @@ let check (globals, functions) =
       with Not_found -> raise (Failure ("undeclared identifier " ^ s))
     in
 
-    (* Return the type of an expression or throw an exception *)
+    (* Return the type of an expression and new expression or throw an exception *)
     let rec expr = function
-	Literal _ -> Int
-      | BoolLit _ -> Bool
-      | Id s -> type_of_identifier s
-      | Binop(e1, op, e2) as e -> let t1 = expr e1 and t2 = expr e2 in
-	(match op with
-          Add | Sub | Mult | Div when t1 = Int && t2 = Int -> Int
-	| Equal | Neq when t1 = t2 -> Bool
-	| Less | Leq | Greater | Geq when t1 = Int && t2 = Int -> Bool
-	| And | Or when t1 = Bool && t2 = Bool -> Bool
-        | _ -> raise (Failure ("illegal binary operator " ^
-              string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
-              string_of_typ t2 ^ " in " ^ string_of_expr e))
-        )
-      | Unop(op, e) as ex -> let t = expr e in
+	Literal(l) -> (Int, SLiteral(l))
+      | BoolLit(l) -> (Bool, SBoolLit(l))
+      | Id s -> (type_of_identifier s, SId(s))
+      | Binop(e1, op, e2) as e -> let t1, e1 = expr e1 and t2, e2 = expr e2 in
+        let typ, op = (match op with
+            Add when t1 = Int && t2 = Int -> (Int, IAdd)
+          | Sub when t1 = Int && t2 = Int -> (Int, ISub)
+          | Mult when t1 = Int && t2 = Int -> (Int, IMult)
+          | Div when t1 = Int && t2 = Int -> (Int, IDiv)
+          | Equal when t1 = Int && t2 = Int -> (Bool, IEqual)
+          | Neq when t1 = Int && t2 = Int -> (Bool, INeq)
+          | Equal when t1 = Bool && t2 = Bool -> (Bool, BEqual)
+          | Neq when t1 = Bool && t2 = Bool -> (Bool, BNeq)
+          | Less when t1 = Int && t2 = Int -> (Bool, ILess)
+          | Leq when t1 = Int && t2 = Int -> (Bool, ILeq)
+          | Greater when t1 = Int && t2 = Int -> (Bool, IGreater)
+          | Geq when t1 = Int && t2 = Int -> (Bool, IGeq)
+          | And when t1 = Bool && t2 = Bool -> (Bool, BAnd)
+          | Or when t1 = Bool && t2 = Bool -> (Bool, BOr)
+          | _ -> raise (Failure ("illegal binary operator " ^
+                string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
+                string_of_typ t2 ^ " in " ^ string_of_expr e))
+          )
+        in (typ, SBinop(e1, op, e2))
+      | Unop(op, e) as ex -> let t, e = expr e in
 	 (match op with
-	   Neg when t = Int -> Int
-	 | Not when t = Bool -> Bool
+	   Neg when t = Int -> (Int, SUnop(INeg, e))
+	 | Not when t = Bool -> (Bool, SUnop(BNot, e))
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
-      | Noexpr -> Void
+      | Noexpr -> (Void, SNoexpr)
       | Assign(var, e) as ex -> let lt = type_of_identifier var
-                                and rt = expr e in
-        check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
-				     " = " ^ string_of_typ rt ^ " in " ^ 
-				     string_of_expr ex))
+                                and rt, e = expr e in
+        (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
+				      " = " ^ string_of_typ rt ^ " in " ^ 
+				      string_of_expr ex)), SAssign(var, e))
       | Call(fname, actuals) as call -> let fd = function_decl fname in
          if List.length actuals != List.length fd.formals then
            raise (Failure ("expecting " ^ string_of_int
              (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
          else
-           List.iter2 (fun (ft, _) e -> let et = expr e in
-              ignore (check_assign ft et
-                (Failure ("illegal actual argument found " ^ string_of_typ et ^
-                " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e))))
-             fd.formals actuals;
-           fd.typ
+           (fd.typ, SCall(fname,
+              List.map2 (fun (ft, _) e -> let et, se = expr e in
+                ignore (check_assign ft et
+                  (Failure ("illegal actual argument found " ^ string_of_typ et ^
+                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
+                se)
+              fd.formals actuals))
     in
 
-    let check_bool_expr e = if expr e != Bool
-     then raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
-     else () in
+    let check_bool_expr e =
+      let t, se = expr e in 
+        if t != Bool then
+          raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
+        else se in
 
     let check_in_loop in_loop = if in_loop then () else
       raise (Failure ("break/continue must be inside a loop")) in
@@ -138,28 +153,36 @@ let check (globals, functions) =
     (* Verify a statement or throw an exception *)
     let rec stmt in_loop = function
 	Block sl -> let rec check_block = function
-           [Return _ as s] -> stmt in_loop s
+          [Return _ as s] -> [stmt in_loop s]
          | Return _ :: _ -> raise (Failure "nothing may follow a return")
          | Break :: _ -> raise (Failure "nothing may follow a break")
          | Continue :: _ -> raise (Failure "nothing may follow a continue")
          | Block sl :: ss -> check_block (sl @ ss)
-         | s :: ss -> stmt in_loop s ; check_block ss
-         | [] -> ()
-        in check_block sl
-      | Expr e -> ignore (expr e)
-      | Return e -> let t = expr e in if t = func.typ then () else
+         | s :: ss -> stmt in_loop s :: check_block ss
+         | [] -> []
+        in SBlock(check_block sl)
+      | Expr e -> SExpr(snd (expr e))
+      | Return e -> let t, se = expr e in if t = func.typ then SReturn(se) else
          raise (Failure ("return gives " ^ string_of_typ t ^ " expected " ^
                          string_of_typ func.typ ^ " in " ^ string_of_expr e))
            
-      | If(p, b1, b2) -> check_bool_expr p; stmt in_loop b1; stmt in_loop b2
-      | For(e1, e2, e3, st) -> ignore (expr e1); check_bool_expr e2;
-                               ignore (expr e3); stmt true st
-      | While(p, s) -> check_bool_expr p; stmt true s
-      | Break -> check_in_loop in_loop
-      | Continue -> check_in_loop in_loop
+      | If(p, b1, b2) ->
+          SIf(check_bool_expr p, stmt in_loop b1, stmt in_loop b2)
+      | For(e1, e2, e3, st) -> SFor(snd (expr e1), check_bool_expr e2,
+                                    snd (expr e3), stmt true st)
+      | While(p, s) -> SWhile(check_bool_expr p, stmt true s)
+      | Break -> check_in_loop in_loop; SBreak
+      | Continue -> check_in_loop in_loop; SContinue
     in
 
-    stmt false (Block func.body)
+    {
+      styp = func.typ;
+      sfname = func.fname;
+      sformals = func.formals;
+      slocals = func.locals;
+      sbody = [stmt false (Block func.body)];
+    }
+
    
   in
-  List.iter check_function functions
+  (globals, List.map check_function functions)
