@@ -1,1 +1,1 @@
-Fatal error: exception Failure("nothing may follow a break")
+Fatal error: exception Failure("break/continue must be inside a loop")

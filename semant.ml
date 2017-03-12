@@ -164,29 +164,29 @@ let check (globals, functions) =
     let check_in_loop in_loop = if in_loop then () else
       raise (Failure ("break/continue must be inside a loop")) in
 
-    (* Verify a statement or throw an exception *)
-    let rec stmt in_loop = function
-	Block sl -> let rec check_block = function
-          [Return _ as s] -> [stmt in_loop s]
-         | Return _ :: _ -> raise (Failure "nothing may follow a return")
-         | Break :: _ -> raise (Failure "nothing may follow a break")
-         | Continue :: _ -> raise (Failure "nothing may follow a continue")
-         | Block sl :: ss -> check_block (sl @ ss)
-         | s :: ss -> stmt in_loop s :: check_block ss
-         | [] -> []
-        in SBlock(check_block sl)
-      | Expr e -> SExpr(snd (expr e))
-      | Return e -> let t, se = expr e in if t = func.typ then SReturn(se) else
+    (* Verify a list of statements or throw an exception *)
+    let rec stmts in_loop = function
+        [Return e] -> let t, se = expr e in if t = func.typ then
+          [SReturn(se)]
+        else
          raise (Failure ("return gives " ^ string_of_typ t ^ " expected " ^
                          string_of_typ func.typ ^ " in " ^ string_of_expr e))
-           
-      | If(p, b1, b2) ->
-          SIf(check_bool_expr p, stmt in_loop b1, stmt in_loop b2)
-      | For(e1, e2, e3, st) -> SFor(snd (expr e1), check_bool_expr e2,
-                                    snd (expr e3), stmt true st)
-      | While(p, s) -> SWhile(check_bool_expr p, stmt true s)
-      | Break -> check_in_loop in_loop; SBreak
-      | Continue -> check_in_loop in_loop; SContinue
+      | [Break] -> check_in_loop in_loop; [SBreak]
+      | [Continue] -> check_in_loop in_loop; [SContinue]
+      | Return _ :: _ -> raise (Failure "nothing may follow a return")
+      | Break :: _ -> raise (Failure "nothing may follow a break")
+      | Continue :: _ -> raise (Failure "nothing may follow a continue")
+      | Block sl :: ss -> stmts in_loop (sl @ ss)
+      | Expr e :: ss -> SExpr(snd (expr e)) :: stmts in_loop ss
+      | If(p, b1, b2) :: ss ->
+          SIf(check_bool_expr p, stmts in_loop [b1],
+              stmts in_loop [b2]) :: stmts in_loop ss
+      | For(e1, e2, e3, st) :: ss ->
+          SFor(snd (expr e1), check_bool_expr e2,
+               snd (expr e3), stmts true [st]) :: stmts in_loop ss
+      | While(p, s) :: ss ->
+          SWhile(check_bool_expr p, stmts true [s]) :: stmts in_loop ss
+      | [] -> []
     in
 
     {
@@ -194,7 +194,7 @@ let check (globals, functions) =
       sfname = func.fname;
       sformals = func.formals;
       slocals = func.locals;
-      sbody = [stmt false (Block func.body)];
+      sbody = stmts false func.body;
     }
 
    

@@ -145,35 +145,32 @@ let translate (globals, functions) =
          L.build_call fdef (Array.of_list actuals) result builder
     in
 
-    (* Invoke "f builder" if the current block doesn't already
-       have a terminal (e.g., a branch). *)
-    let add_terminal builder f =
+    (* Build a list of statments, and invoke "f builder" if the list doesn't
+     * end with a branch instruction (break, continue, return) *)
+    let rec stmts break_bb continue_bb builder sl f =
+      let builder = List.fold_left (stmt break_bb continue_bb) builder sl in
       match L.block_terminator (L.insertion_block builder) with
 	Some _ -> ()
-      | None -> ignore (f builder) in
-	
+      | None -> ignore (f builder)
     (* Build the code for the given statement; return the builder for
        the statement's successor *)
-    let rec stmt break_bb continue_bb builder = function
-	SA.SBlock sl -> List.fold_left (stmt break_bb continue_bb) builder sl
+    and stmt break_bb continue_bb builder = function
       | SA.SExpr e -> ignore (expr builder e); builder
       | SA.SReturn e -> ignore (match fdecl.SA.styp with
 	  A.Void -> L.build_ret_void builder
 	| _ -> L.build_ret (expr builder e) builder); builder
       | SA.SBreak -> ignore (L.build_br break_bb builder); builder
       | SA.SContinue -> ignore (L.build_br continue_bb builder); builder
-      | SA.SIf (predicate, then_stmt, else_stmt) ->
+      | SA.SIf (predicate, then_stmts, else_stmts) ->
          let bool_val = expr builder predicate in
 	 let merge_bb = L.append_block context "merge" the_function in
 
 	 let then_bb = L.append_block context "then" the_function in
-	 add_terminal
-          (stmt break_bb continue_bb (L.builder_at_end context then_bb) then_stmt)
+	 stmts break_bb continue_bb (L.builder_at_end context then_bb) then_stmts
 	  (L.build_br merge_bb);
 
 	 let else_bb = L.append_block context "else" the_function in
-	 add_terminal
-          (stmt break_bb continue_bb (L.builder_at_end context else_bb) else_stmt)
+	 stmts break_bb continue_bb (L.builder_at_end context else_bb) else_stmts
 	  (L.build_br merge_bb);
 
 	 ignore (L.build_cond_br bool_val then_bb else_bb builder);
@@ -186,8 +183,7 @@ let translate (globals, functions) =
 
 	  ignore (L.build_br pred_bb builder);
 
-	  add_terminal
-            (stmt merge_bb pred_bb (L.builder_at_end context body_bb) body)
+	  stmts merge_bb pred_bb (L.builder_at_end context body_bb) body
 	    (L.build_br pred_bb);
 
 	  let pred_builder = L.builder_at_end context pred_bb in
@@ -206,8 +202,7 @@ let translate (globals, functions) =
 
           ignore (L.build_br pred_bb builder);
 
-          add_terminal
-            (stmt merge_bb final_bb (L.builder_at_end context body_bb) body)
+          stmts merge_bb final_bb (L.builder_at_end context body_bb) body
             (L.build_br final_bb);
 
           let pred_builder = L.builder_at_end context pred_bb in
@@ -226,12 +221,12 @@ let translate (globals, functions) =
     (* Build the code for each statement in the function *)
     let dummy_bb = L.append_block context "dummy" the_function in
     ignore (L.build_unreachable (L.builder_at_end context dummy_bb));
-    let builder = stmt dummy_bb dummy_bb builder (SA.SBlock fdecl.SA.sbody) in
-
-    (* Add a return if the last block falls off the end *)
-    add_terminal builder (match fdecl.SA.styp with
+    stmts dummy_bb dummy_bb builder fdecl.SA.sbody
+      (* Add a return if the last block falls off the end *)
+      (match fdecl.SA.styp with
         A.Void -> L.build_ret_void
       | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
+
   in
 
   List.iter build_function_body functions;
