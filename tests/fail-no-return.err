@@ -1,0 +1,1 @@
+Fatal error: exception Failure("missing final return from function main with non-void return type")

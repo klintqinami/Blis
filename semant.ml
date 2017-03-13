@@ -166,42 +166,50 @@ let check (globals, functions) =
 
     (* Verify a list of statements or throw an exception *)
     let rec stmts in_loop sl = 
-      let rec stmts' sstmts sl = List.fold_left
-        (fun sstmts stmt ->
-          match sstmts with
-              SBreak :: _ -> raise (Failure "nothing may follow a break")
-            | SContinue :: _ -> raise (Failure "nothing may follow a continue")
-            | SReturn _ :: _ -> raise (Failure "nothing may follow a return")
-            | _ -> match stmt with
-                Break -> check_in_loop in_loop; SBreak :: sstmts
-              | Continue -> check_in_loop in_loop; SContinue :: sstmts
-              | Return e -> let t, se = expr e in if t = func.typ then
-                  SReturn(se) :: sstmts
-                else
-                  raise (Failure ("return gives " ^ string_of_typ t ^ " expected " ^
-                           string_of_typ func.typ ^ " in " ^ string_of_expr e))
-              | Block sl -> stmts' sstmts sl
-              | If(p, b1, b2) -> SIf(check_bool_expr p,
-                                     stmts in_loop [b1],
-                                     stmts in_loop [b2]) :: sstmts
-              | For(e1, e2, e3, st) -> SFor(snd (expr e1),
-                                            check_bool_expr e2,
-                                            snd (expr e3),
-                                            stmts true [st]) :: sstmts
-              | While(p, s) -> SWhile(check_bool_expr p, stmts true [s]) :: sstmts
-              | Expr e -> SExpr(snd (expr e)) :: sstmts)
-        sstmts sl
-      in
-      List.rev (stmts' [] sl)
-
+      List.rev (stmts' in_loop [] sl)
+    (* Helper function that returns the list of SAST statements in reverse 
+     * order *)
+    and stmts' in_loop sstmts sl = List.fold_left
+      (fun sstmts stmt ->
+        match sstmts with
+            SBreak :: _ -> raise (Failure "nothing may follow a break")
+          | SContinue :: _ -> raise (Failure "nothing may follow a continue")
+          | SReturn _ :: _ -> raise (Failure "nothing may follow a return")
+          | _ -> match stmt with
+              Break -> check_in_loop in_loop; SBreak :: sstmts
+            | Continue -> check_in_loop in_loop; SContinue :: sstmts
+            | Return e -> let t, se = expr e in if t = func.typ then
+                SReturn(se) :: sstmts
+              else
+                raise (Failure ("return gives " ^ string_of_typ t ^ " expected " ^
+                         string_of_typ func.typ ^ " in " ^ string_of_expr e))
+            | Block sl -> stmts' in_loop sstmts sl
+            | If(p, b1, b2) -> SIf(check_bool_expr p,
+                                   stmts in_loop [b1],
+                                   stmts in_loop [b2]) :: sstmts
+            | For(e1, e2, e3, st) -> SFor(snd (expr e1),
+                                          check_bool_expr e2,
+                                          snd (expr e3),
+                                          stmts true [st]) :: sstmts
+            | While(p, s) -> SWhile(check_bool_expr p, stmts true [s]) :: sstmts
+            | Expr e -> SExpr(snd (expr e)) :: sstmts)
+      sstmts sl
     in
+
+    let sbody = stmts' false [] func.body in
+    if func.typ <> Void then match sbody with
+        SReturn _ :: _ -> ()
+      | _ -> raise (Failure ("missing final return from function " ^ func.fname ^
+                    " with non-void return type"))
+    else ()
+    ;
 
     {
       styp = func.typ;
       sfname = func.fname;
       sformals = func.formals;
       slocals = func.locals;
-      sbody = stmts false func.body;
+      sbody = List.rev sbody;
     }
 
    

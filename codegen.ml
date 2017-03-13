@@ -222,10 +222,9 @@ let translate (globals, functions) =
     let dummy_bb = L.append_block context "dummy" the_function in
     ignore (L.build_unreachable (L.builder_at_end context dummy_bb));
     stmts dummy_bb dummy_bb builder fdecl.SA.sbody
-      (* Add a return if the last block falls off the end *)
-      (match fdecl.SA.styp with
-        A.Void -> L.build_ret_void
-      | t -> L.build_ret (L.const_int (ltype_of_typ t) 0))
+      (* Add a return if the last block falls off the end. Semantic checking
+       * ensures that only functions that return void hit this path. *)
+      L.build_ret_void
 
   in
 
