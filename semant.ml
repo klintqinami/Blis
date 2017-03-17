@@ -91,6 +91,12 @@ let check (globals, functions) =
       with Not_found -> raise (Failure ("undeclared identifier " ^ s))
     in
 
+    let lvalue = function
+        Id s -> (type_of_identifier s, SId(s))
+      | _ as e ->
+          raise (Failure ("expression " ^ string_of_expr e ^ " is not an lvalue"))
+    in
+
     (* Return the type of an expression and new expression or throw an exception *)
     let rec expr = function
 	IntLit(l) -> (Int, SIntLit(l))
@@ -138,12 +144,13 @@ let check (globals, functions) =
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
       | Noexpr -> (Void, SNoexpr)
-      | Assign(var, e) as ex -> let lt = type_of_identifier var
-                                and e = expr e in
+      | Assign(lval, e) as ex -> let lval = lvalue lval in
+                                let e = expr e in
+                                let lt = fst lval in
                                 let rt = fst e in
         (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
 				      " = " ^ string_of_typ rt ^ " in " ^ 
-				      string_of_expr ex)), SAssign(var, e))
+				      string_of_expr ex)), SAssign(lval, e))
       | Call(fname, actuals) as call -> let fd = function_decl fname in
          if List.length actuals != List.length fd.formals then
            raise (Failure ("expecting " ^ string_of_int

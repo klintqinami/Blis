@@ -85,13 +85,24 @@ let translate (globals, functions) =
                    with Not_found -> StringMap.find n global_vars
     in
 
+    (* evaluates an expression and returns a pointer to its value. If the
+     * expression is an lvalue, guarantees that the pointer is to the memory
+     * referenced by the lvalue.
+     *)
+    let rec lvalue builder sexpr = match snd sexpr with
+        SA.SId s -> lookup s
+      | _ -> let e' = expr builder sexpr in
+          let temp =
+            L.build_alloca (ltype_of_typ (fst sexpr)) "expr_tmp" builder in
+          ignore (L.build_store e' temp builder); temp
+
     (* Construct code for an expression; return its value *)
-    let rec expr builder sexpr = match snd sexpr with
+    and expr builder sexpr = match snd sexpr with
 	SA.SIntLit i -> L.const_int i32_t i
       | SA.SFloatLit f -> L.const_float f32_t f
       | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
       | SA.SNoexpr -> L.const_int i32_t 0
-      | SA.SId s -> L.build_load (lookup s) s builder
+      | SA.SId _ -> L.build_load (lvalue builder sexpr) "load_tmp" builder
       | SA.SBinop (e1, op, e2) ->
 	  let e1' = expr builder e1
 	  and e2' = expr builder e2 in
@@ -127,8 +138,9 @@ let translate (globals, functions) =
 	    SA.INeg     -> L.build_neg
 	  | SA.FNeg     -> L.build_fneg
           | SA.BNot     -> L.build_not) e' "tmp" builder
-      | SA.SAssign (s, e) -> let e' = expr builder e in
-	                   ignore (L.build_store e' (lookup s) builder); e'
+      | SA.SAssign (lval, e) -> let lval' = lvalue builder lval in
+                                let e' = expr builder e in
+                           	ignore (L.build_store e' lval' builder); e'
       | SA.SCall ("print", [e]) | SA.SCall ("printb", [e]) ->
 	  L.build_call printf_func [| int_format_str ; (expr builder e) |]
 	    "printf" builder
