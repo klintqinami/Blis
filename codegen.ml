@@ -86,7 +86,7 @@ let translate (globals, functions) =
     in
 
     (* Construct code for an expression; return its value *)
-    let rec expr builder = function
+    let rec expr builder sexpr = match snd sexpr with
 	SA.SIntLit i -> L.const_int i32_t i
       | SA.SFloatLit f -> L.const_float f32_t f
       | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)

@@ -97,7 +97,8 @@ let check (globals, functions) =
       | FloatLit(l) -> (Float, SFloatLit(l))
       | BoolLit(l) -> (Bool, SBoolLit(l))
       | Id s -> (type_of_identifier s, SId(s))
-      | Binop(e1, op, e2) as e -> let t1, e1 = expr e1 and t2, e2 = expr e2 in
+      | Binop(e1, op, e2) as e -> let e1 = expr e1 and e2 = expr e2 in
+        let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op with
             Add when t1 = Int && t2 = Int -> (Int, IAdd)
           | Sub when t1 = Int && t2 = Int -> (Int, ISub)
@@ -128,7 +129,8 @@ let check (globals, functions) =
                 string_of_typ t2 ^ " in " ^ string_of_expr e))
           )
         in (typ, SBinop(e1, op, e2))
-      | Unop(op, e) as ex -> let t, e = expr e in
+      | Unop(op, e) as ex -> let e = expr e in
+         let t = fst e in
 	 (match op with
 	   Neg when t = Int -> (Int, SUnop(INeg, e))
 	 | Neg when t = Float -> (Int, SUnop(FNeg, e))
@@ -137,7 +139,8 @@ let check (globals, functions) =
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
       | Noexpr -> (Void, SNoexpr)
       | Assign(var, e) as ex -> let lt = type_of_identifier var
-                                and rt, e = expr e in
+                                and e = expr e in
+                                let rt = fst e in
         (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
 				      " = " ^ string_of_typ rt ^ " in " ^ 
 				      string_of_expr ex)), SAssign(var, e))
@@ -147,7 +150,8 @@ let check (globals, functions) =
              (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
          else
            (fd.typ, SCall(fname,
-              List.map2 (fun (ft, _) e -> let et, se = expr e in
+              List.map2 (fun (ft, _) e -> let se = expr e in
+                let et = fst se in
                 ignore (check_assign ft et
                   (Failure ("illegal actual argument found " ^ string_of_typ et ^
                   " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
@@ -156,8 +160,8 @@ let check (globals, functions) =
     in
 
     let check_bool_expr e =
-      let t, se = expr e in 
-        if t != Bool then
+      let se = expr e in 
+        if fst se != Bool then
           raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
         else se in
 
@@ -178,21 +182,21 @@ let check (globals, functions) =
           | _ -> match stmt with
               Break -> check_in_loop in_loop; SBreak :: sstmts
             | Continue -> check_in_loop in_loop; SContinue :: sstmts
-            | Return e -> let t, se = expr e in if t = func.typ then
+            | Return e -> let se = expr e in if fst se = func.typ then
                 SReturn(se) :: sstmts
               else
-                raise (Failure ("return gives " ^ string_of_typ t ^ " expected " ^
+                raise (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
                          string_of_typ func.typ ^ " in " ^ string_of_expr e))
             | Block sl -> stmts' in_loop sstmts sl
             | If(p, b1, b2) -> SIf(check_bool_expr p,
                                    stmts in_loop [b1],
                                    stmts in_loop [b2]) :: sstmts
-            | For(e1, e2, e3, st) -> SFor(snd (expr e1),
+            | For(e1, e2, e3, st) -> SFor(expr e1,
                                           check_bool_expr e2,
-                                          snd (expr e3),
+                                          expr e3,
                                           stmts true [st]) :: sstmts
             | While(p, s) -> SWhile(check_bool_expr p, stmts true [s]) :: sstmts
-            | Expr e -> SExpr(snd (expr e)) :: sstmts)
+            | Expr e -> SExpr(expr e) :: sstmts)
       sstmts sl
     in
 

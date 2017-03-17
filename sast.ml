@@ -10,7 +10,7 @@ type sop = IAdd | ISub | IMult | IDiv
 
 type suop = INeg | FNeg | BNot
 
-type sexpr =
+type sexpr_detail =
     SIntLit of int
   | SFloatLit of float
   | SBoolLit of bool
@@ -20,6 +20,8 @@ type sexpr =
   | SAssign of string * sexpr
   | SCall of string * sexpr list
   | SNoexpr
+
+and sexpr = typ * sexpr_detail
 
 type sstmt =
     SExpr of sexpr
@@ -60,7 +62,7 @@ let string_of_suop = function
     INeg | FNeg -> "-"
   | BNot -> "!"
 
-let rec string_of_sexpr = function
+let rec string_of_sexpr (s : sexpr) = match snd s with
     SIntLit(l) -> string_of_int l
   | SFloatLit(l) -> string_of_float l
   | SBoolLit(true) -> "true"
