@@ -1,0 +1,1 @@
+Fatal error: exception Failure("illegal initialization bool = int in bool foo = 1;")

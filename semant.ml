@@ -4,6 +4,16 @@ open Ast
 open Sast
 
 module StringMap = Map.Make(String)
+module StringSet = Set.Make(String)
+
+type symbol = Ast.typ * string
+
+type translation_environment = {
+  scope : symbol StringMap.t;
+  names : StringSet.t;
+  locals : bind list;
+  in_loop : bool;
+}
 
 (* Semantic checking of a program. Returns the SAST if successful,
    throws an exception if something is wrong.
@@ -21,6 +31,36 @@ let check (globals, functions) =
     in helper (List.sort compare list)
   in
 
+  let find_symbol_table table name =
+    if StringMap.mem name table then
+      StringMap.find name table
+    else
+      raise (Failure ("undeclared identifier " ^ name))
+  in
+
+  (* Adds/replaces symbol on the symbol table, returns the new unique name for
+   * the symbol 
+   *)
+  let add_symbol_table env name typ =
+    (* if the name already exists, add a number to it to make it unique *)
+    let find_unique_name name =
+      if not (StringSet.mem name env.names) then
+        name
+      else
+        let rec find_unique_name' env name n = 
+          let unique_name = name ^ string_of_int n in
+          if not (StringSet.mem unique_name env.names) then
+            unique_name
+          else
+            find_unique_name' env name (n + 1)
+        in
+        find_unique_name' env name 1
+    in
+    let unique_name = find_unique_name name in
+    ({ env with scope = StringMap.add name (typ, unique_name) env.scope;
+       names = StringSet.add unique_name env.names; }, unique_name)
+  in
+
   (* Raise an exception if a given binding is to a void type *)
   let check_not_void exceptf = function
       (Void, n) -> raise (Failure (exceptf n))
@@ -36,6 +76,16 @@ let check (globals, functions) =
   (**** Checking Global Variables ****)
 
   List.iter (check_not_void (fun n -> "illegal void global " ^ n)) globals;
+
+  let env = {
+    in_loop = false;
+    scope = StringMap.empty;
+    locals = [];
+    names = StringSet.empty; } in
+
+  let env = List.fold_left (fun env (typ, name) ->
+      fst (add_symbol_table env name typ))
+    env globals in
    
   report_duplicate (fun n -> "duplicate global " ^ n) (List.map snd globals);
 
@@ -50,11 +100,11 @@ let check (globals, functions) =
   (* Function declaration for a named function *)
   let built_in_decls =  [
      { typ = Void; fname = "print"; formals = [(Int, "x")];
-       locals = []; body = [] };
+       body = [] };
      { typ = Void; fname = "printb"; formals = [(Bool, "x")];
-       locals = []; body = [] };
+       body = [] };
      { typ = Void; fname = "printf"; formals = [(Float, "x")];
-       locals = []; body = [] }]
+       body = [] }]
    in
      
   let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
@@ -75,35 +125,19 @@ let check (globals, functions) =
     report_duplicate (fun n -> "duplicate formal " ^ n ^ " in " ^ func.fname)
       (List.map snd func.formals);
 
-    List.iter (check_not_void (fun n -> "illegal void local " ^ n ^
-      " in " ^ func.fname)) func.locals;
-
-    report_duplicate (fun n -> "duplicate local " ^ n ^ " in " ^ func.fname)
-      (List.map snd func.locals);
-
-    (* Type of each variable (global, formal, or local *)
-    let symbols = List.fold_left (fun m (t, n) -> StringMap.add n t m)
-	StringMap.empty (globals @ func.formals @ func.locals )
-    in
-
-    let type_of_identifier s =
-      try StringMap.find s symbols
-      with Not_found -> raise (Failure ("undeclared identifier " ^ s))
-    in
-
-    let lvalue = function
-        Id s -> (type_of_identifier s, SId(s))
+    let lvalue env = function
+        Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
       | _ as e ->
           raise (Failure ("expression " ^ string_of_expr e ^ " is not an lvalue"))
     in
 
     (* Return the type of an expression and new expression or throw an exception *)
-    let rec expr = function
+    let rec expr (env : translation_environment) = function
 	IntLit(l) -> (Int, SIntLit(l))
       | FloatLit(l) -> (Float, SFloatLit(l))
       | BoolLit(l) -> (Bool, SBoolLit(l))
-      | Id s -> (type_of_identifier s, SId(s))
-      | Binop(e1, op, e2) as e -> let e1 = expr e1 and e2 = expr e2 in
+      | Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
+      | Binop(e1, op, e2) as e -> let e1 = expr env e1 and e2 = expr env e2 in
         let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op with
             Add when t1 = Int && t2 = Int -> (Int, IAdd)
@@ -135,7 +169,7 @@ let check (globals, functions) =
                 string_of_typ t2 ^ " in " ^ string_of_expr e))
           )
         in (typ, SBinop(e1, op, e2))
-      | Unop(op, e) as ex -> let e = expr e in
+      | Unop(op, e) as ex -> let e = expr env e in
          let t = fst e in
 	 (match op with
 	   Neg when t = Int -> (Int, SUnop(INeg, e))
@@ -144,8 +178,8 @@ let check (globals, functions) =
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
       | Noexpr -> (Void, SNoexpr)
-      | Assign(lval, e) as ex -> let lval = lvalue lval in
-                                let e = expr e in
+      | Assign(lval, e) as ex -> let lval = lvalue env lval in
+                                let e = expr env e in
                                 let lt = fst lval in
                                 let rt = fst e in
         (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
@@ -157,7 +191,7 @@ let check (globals, functions) =
              (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
          else
            (fd.typ, SCall(fname,
-              List.map2 (fun (ft, _) e -> let se = expr e in
+              List.map2 (fun (ft, _) e -> let se = expr env e in
                 let et = fst se in
                 ignore (check_assign ft et
                   (Failure ("illegal actual argument found " ^ string_of_typ et ^
@@ -166,48 +200,78 @@ let check (globals, functions) =
               fd.formals actuals))
     in
 
-    let check_bool_expr e =
-      let se = expr e in 
+    let check_bool_expr env e =
+      let se = expr env e in 
         if fst se != Bool then
           raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
         else se in
 
-    let check_in_loop in_loop = if in_loop then () else
+    let check_in_loop env = if env.in_loop then () else
       raise (Failure ("break/continue must be inside a loop")) in
 
-    (* Verify a list of statements or throw an exception *)
-    let rec stmts in_loop sl = 
-      List.rev (stmts' in_loop [] sl)
+    (* Verify a statement or throw an exception *)
+    let rec check_stmt env in_loop_new = function
+        Local((_, s), _) -> raise (Failure ("local variable " ^ s ^
+          " not declared inside a block"))
+      | _ as s ->
+          let env', sl = stmts' { env with in_loop = in_loop_new; } [] [s] in
+          { env with locals = env'.locals; names = env'.names; }, List.rev sl
     (* Helper function that returns the list of SAST statements in reverse 
      * order *)
-    and stmts' in_loop sstmts sl = List.fold_left
-      (fun sstmts stmt ->
+    and stmts' env sstmts sl = List.fold_left
+      (fun (env, sstmts) stmt ->
         match sstmts with
             SBreak :: _ -> raise (Failure "nothing may follow a break")
           | SContinue :: _ -> raise (Failure "nothing may follow a continue")
           | SReturn _ :: _ -> raise (Failure "nothing may follow a return")
           | _ -> match stmt with
-              Break -> check_in_loop in_loop; SBreak :: sstmts
-            | Continue -> check_in_loop in_loop; SContinue :: sstmts
-            | Return e -> let se = expr e in if fst se = func.typ then
-                SReturn(se) :: sstmts
+              Break -> check_in_loop env; env, (SBreak :: sstmts)
+            | Continue -> check_in_loop env; env, (SContinue :: sstmts)
+            | Return e -> let se = expr env e in if fst se = func.typ then
+                env, (SReturn(se) :: sstmts)
               else
                 raise (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
                          string_of_typ func.typ ^ " in " ^ string_of_expr e))
-            | Block sl -> stmts' in_loop sstmts sl
-            | If(p, b1, b2) -> SIf(check_bool_expr p,
-                                   stmts in_loop [b1],
-                                   stmts in_loop [b2]) :: sstmts
-            | For(e1, e2, e3, st) -> SFor(expr e1,
-                                          check_bool_expr e2,
-                                          expr e3,
-                                          stmts true [st]) :: sstmts
-            | While(p, s) -> SWhile(check_bool_expr p, stmts true [s]) :: sstmts
-            | Expr e -> SExpr(expr e) :: sstmts)
-      sstmts sl
+            | Block sl -> let env', sstmts = stmts' env sstmts sl in
+                { env with locals = env'.locals; names = env'.names; }, sstmts
+            | If(p, b1, b2) ->
+                let p = check_bool_expr env p in
+                let env, sthen = check_stmt env env.in_loop b1 in
+                let env, selse = check_stmt env env.in_loop b2 in
+                env, (SIf(p, sthen, selse) :: sstmts)
+            | For(e1, e2, e3, st) ->
+                let e1 = expr env e1 in
+                let e2 = check_bool_expr env e2 in
+                let e3 = expr env e3 in
+                let env, body = check_stmt env true st in
+                  env, (SFor(e1, e2, e3, body) :: sstmts)
+            | While(p, s) ->
+                let p = check_bool_expr env p in
+                let env, body = check_stmt env true s in
+                  env, (SWhile(p, body) :: sstmts)
+            | Expr e -> env, (SExpr(expr env e) :: sstmts)
+            | Local ((t, s) as b, oe) ->
+                (check_not_void (fun n -> "illegal void local " ^ n ^
+                                  " in " ^ func.fname) b);
+                let env, name = add_symbol_table env s t in
+                let env = { env with locals = (t, name) :: env.locals } in
+                match oe with
+                    Some e -> let e' = expr env e in
+                      ignore (check_assign t (fst e')
+                        (Failure ("illegal initialization " ^ string_of_typ t ^
+                          " = " ^ string_of_typ (fst e') ^ " in " ^
+                          string_of_typ t ^ " " ^ s ^ " = " ^ string_of_expr e ^
+                          ";")));
+                      env, SExpr(t, SAssign((t, SId name), e')) :: sstmts
+                  | None -> env, sstmts)
+      (env, sstmts) sl
     in
 
-    let sbody = stmts' false [] func.body in
+    let env = List.fold_left (fun env (t, s) ->
+      fst (add_symbol_table env s t)) env func.formals
+    in
+
+    let env, sbody = stmts' env [] func.body in
     if func.typ <> Void then match sbody with
         SReturn _ :: _ -> ()
       | _ -> raise (Failure ("missing final return from function " ^ func.fname ^
@@ -219,7 +283,7 @@ let check (globals, functions) =
       styp = func.typ;
       sfname = func.fname;
       sformals = func.formals;
-      slocals = func.locals;
+      slocals = env.locals;
       sbody = List.rev sbody;
     }
 

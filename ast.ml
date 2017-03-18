@@ -22,6 +22,7 @@ type expr =
 
 type stmt =
     Block of stmt list
+  | Local of bind * expr option (* optional initializer *)
   | Expr of expr
   | Return of expr
   | If of expr * stmt * stmt
@@ -34,7 +35,6 @@ type func_decl = {
     typ : typ;
     fname : string;
     formals : bind list;
-    locals : bind list;
     body : stmt list;
   }
 
@@ -74,9 +74,20 @@ let rec string_of_expr = function
       f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Noexpr -> ""
 
+let string_of_typ = function
+    Int -> "int"
+  | Float -> "float"
+  | Bool -> "bool"
+  | Void -> "void"
+
+let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
+
 let rec string_of_stmt = function
     Block(stmts) ->
       "{\n" ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
+  | Local(decl, None) -> string_of_vdecl decl
+  | Local((t, id), Some e) -> string_of_typ t ^ " " ^ id ^ " = " ^
+      string_of_expr e ^ ";\n"
   | Expr(expr) -> string_of_expr expr ^ ";\n";
   | Return(expr) -> "return " ^ string_of_expr expr ^ ";\n";
   | If(e, s, Block([])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
@@ -89,19 +100,10 @@ let rec string_of_stmt = function
   | Break -> "break;"
   | Continue -> "continue;"
 
-let string_of_typ = function
-    Int -> "int"
-  | Float -> "float"
-  | Bool -> "bool"
-  | Void -> "void"
-
-let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
-
 let string_of_fdecl fdecl =
   string_of_typ fdecl.typ ^ " " ^
   fdecl.fname ^ "(" ^ String.concat ", " (List.map snd fdecl.formals) ^
   ")\n{\n" ^
-  String.concat "" (List.map string_of_vdecl fdecl.locals) ^
   String.concat "" (List.map string_of_stmt fdecl.body) ^
   "}\n"
 

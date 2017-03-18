@@ -39,12 +39,14 @@ decls:
  | decls fdecl { fst $1, ($2 :: snd $1) }
 
 fdecl:
-   typ ID LPAREN formals_opt RPAREN LBRACE vdecl_list stmt_list RBRACE
+   typ ID LPAREN formals_opt RPAREN LBRACE stmt_list RBRACE
      { { typ = $1;
 	 fname = $2;
 	 formals = $4;
-	 locals = List.rev $7;
-	 body = List.rev $8 } }
+	 body = List.rev $7 } }
+
+vdecl:
+    typ ID SEMI { ($1, $2) }
 
 formals_opt:
     /* nothing */ { [] }
@@ -60,19 +62,14 @@ typ:
   | BOOL { Bool }
   | VOID { Void }
 
-vdecl_list:
-    /* nothing */    { [] }
-  | vdecl_list vdecl { $2 :: $1 }
-
-vdecl:
-   typ ID SEMI { ($1, $2) }
-
 stmt_list:
     /* nothing */  { [] }
   | stmt_list stmt { $2 :: $1 }
 
 stmt:
     expr SEMI { Expr $1 }
+  | typ ID SEMI { Local (($1, $2), None) }
+  | typ ID ASSIGN expr SEMI { Local (($1, $2), Some $4) }
   | RETURN SEMI { Return Noexpr }
   | RETURN expr SEMI { Return $2 }
   | BREAK SEMI { Break }
