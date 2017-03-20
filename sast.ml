@@ -15,6 +15,7 @@ type sexpr_detail =
   | SFloatLit of float
   | SBoolLit of bool
   | SId of string
+  | SDeref of sexpr * string
   | SBinop of sexpr * sop * sexpr
   | SUnop of suop * sexpr
   | SAssign of sexpr * sexpr
@@ -40,7 +41,7 @@ type sfunc_decl = {
     sbody : sstmt list;
   }
 
-type sprogram = bind list * sfunc_decl list
+type sprogram = struct_decl list * bind list * sfunc_decl list
 
 (* Pretty-printing functions *)
 
@@ -68,6 +69,7 @@ let rec string_of_sexpr (s : sexpr) = match snd s with
   | SBoolLit(true) -> "true"
   | SBoolLit(false) -> "false"
   | SId(s) -> s
+  | SDeref(e, m) -> string_of_sexpr e ^ "." ^ m
   | SBinop(e1, o, e2) ->
       string_of_sexpr e1 ^ " " ^ string_of_sop o ^ " " ^ string_of_sexpr e2
   | SUnop(o, e) -> string_of_suop o ^ string_of_sexpr e
@@ -99,6 +101,7 @@ let string_of_sfdecl fdecl =
   String.concat "" (List.map string_of_sstmt fdecl.sbody) ^
   "}\n"
 
-let string_of_sprogram (vars, funcs) =
+let string_of_sprogram (structs, vars, funcs) =
+  String.concat "" (List.map string_of_sdecl structs) ^ "\n" ^
   String.concat "" (List.map string_of_vdecl vars) ^ "\n" ^
   String.concat "\n" (List.map string_of_sfdecl funcs)

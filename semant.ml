@@ -20,7 +20,10 @@ type translation_environment = {
 
    Check each global variable, then check each function *)
 
-let check (globals, functions) =
+let check program =
+  let globals = program.var_decls in
+  let functions = program.func_decls in
+  let structs = program.struct_decls in
 
   (* Raise an exception if the given list has a duplicate *)
   let report_duplicate exceptf list =
@@ -61,21 +64,74 @@ let check (globals, functions) =
        names = StringSet.add unique_name env.names; }, unique_name)
   in
 
-  (* Raise an exception if a given binding is to a void type *)
-  let check_not_void exceptf = function
-      (Void, n) -> raise (Failure (exceptf n))
-    | _ -> ()
-  in
-  
   (* Raise an exception of the given rvalue type cannot be assigned to
      the given lvalue type *)
   let check_assign lvaluet rvaluet err =
      if lvaluet == rvaluet then lvaluet else raise err
   in
+
+  (**** Checking Structure Declarations ****)
+
+  report_duplicate
+    (fun n -> "duplicate structure " ^ n)
+    (List.map (fun s -> s.sname) structs);
+
+  let struct_decls = List.fold_left (fun m s ->
+    StringMap.add s.sname s m) StringMap.empty structs
+  in
+
+  (* Raise an exception if a given binding is to a void type or a struct that
+   * doesn't exist *)
+  let check_type bad_struct void = function
+      (Struct s, n) -> if not (StringMap.mem s struct_decls) then
+          raise (Failure (bad_struct s n))
+        else
+          ()
+    | (Void, n) -> raise (Failure (void n))
+    | _ -> ()
+  in
+
+  List.iter (fun s ->
+    report_duplicate
+      (fun m -> "duplicate member " ^ m ^ " of structure " ^ s.sname)
+      (List.map snd s.members)) structs;
+
+  List.iter (fun s ->
+    List.iter (fun m -> check_type
+      (fun sn n -> "struct " ^ sn ^ " does not exist in member " ^ n ^ 
+        " of struct " ^ s.sname)
+      (fun n -> "illegal void member " ^ n ^ " of struct " ^ s.sname)
+      m)
+    s.members)
+  structs;
+
+  let _ =
+    (* function from struct name to a list of struct names used in its members *)
+    let succs s = StringSet.elements (List.fold_left (fun succs m ->
+      match fst m with
+          Struct succ -> StringSet.add succ succs
+        | _ -> succs)
+    StringSet.empty (StringMap.find s struct_decls).members)
+    in
+    let rec tsort path visited = function
+        [] -> visited
+      | n :: nodes -> 
+          if List.mem n path then
+            raise (Failure ("cycle in struct definitions: " ^
+              String.concat " -> " (List.rev (n :: path))))
+          else
+            let v' = if List.mem n visited then visited else
+              n :: tsort (n :: path) visited (succs n)
+            in tsort path v' nodes
+    in
+    ignore (tsort [] [] (List.map (fun s -> s.sname) structs))
+  in
    
   (**** Checking Global Variables ****)
 
-  List.iter (check_not_void (fun n -> "illegal void global " ^ n)) globals;
+  List.iter (check_type
+    (fun s n -> "struct " ^ s ^ " does not exist for global " ^ n)
+    (fun n -> "illegal void global " ^ n)) globals;
 
   let env = {
     in_loop = false;
@@ -119,24 +175,42 @@ let check (globals, functions) =
 
   let check_function func =
 
-    List.iter (check_not_void (fun n -> "illegal void formal " ^ n ^
-      " in " ^ func.fname)) func.formals;
+    List.iter (check_type
+      (fun s n -> "struct " ^ s ^ " does not exist for formal " ^ n ^ " in " ^
+        func.fname)
+      (fun n -> "illegal void formal " ^ n ^ " in " ^ func.fname))
+    func.formals;
 
     report_duplicate (fun n -> "duplicate formal " ^ n ^ " in " ^ func.fname)
       (List.map snd func.formals);
 
-    let lvalue env = function
+    let rec lvalue need_lvalue env = function
         Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
+      | Deref(e, m) as d -> let e' = lvalue need_lvalue env e in
+          let typ = fst e' in
+          ((match typ with
+              Struct s ->
+                let stype = StringMap.find s struct_decls in
+                (try
+                  fst (List.find (fun b -> snd b = m) stype.members)
+                with Not_found ->
+                  raise (Failure ("struct " ^ s ^ " does not contain member " ^
+                    m ^ " in " ^ string_of_expr d)))
+            | _ -> raise (Failure ("illegal dereference of type " ^
+                string_of_typ typ ^ " in " ^ string_of_expr d)))
+          , SDeref(e', m))
       | _ as e ->
-          raise (Failure ("expression " ^ string_of_expr e ^ " is not an lvalue"))
-    in
+          if need_lvalue then
+            raise (Failure ("expression " ^ string_of_expr e ^ " is not an lvalue"))
+          else
+            expr env e
 
     (* Return the type of an expression and new expression or throw an exception *)
-    let rec expr (env : translation_environment) = function
+    and expr (env : translation_environment) = function
 	IntLit(l) -> (Int, SIntLit(l))
       | FloatLit(l) -> (Float, SFloatLit(l))
       | BoolLit(l) -> (Bool, SBoolLit(l))
-      | Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
+      | Id _ | Deref(_, _) as e -> lvalue false env e
       | Binop(e1, op, e2) as e -> let e1 = expr env e1 and e2 = expr env e2 in
         let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op with
@@ -178,7 +252,7 @@ let check (globals, functions) =
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
       | Noexpr -> (Void, SNoexpr)
-      | Assign(lval, e) as ex -> let lval = lvalue env lval in
+      | Assign(lval, e) as ex -> let lval = lvalue true env lval in
                                 let e = expr env e in
                                 let lt = fst lval in
                                 let rt = fst e in
@@ -251,7 +325,10 @@ let check (globals, functions) =
                   env, (SWhile(p, body) :: sstmts)
             | Expr e -> env, (SExpr(expr env e) :: sstmts)
             | Local ((t, s) as b, oe) ->
-                (check_not_void (fun n -> "illegal void local " ^ n ^
+                (check_type
+                  (fun s n -> "struct " ^ s ^ " does not exist for local " ^ n ^
+                    " in " ^ func.fname)
+                  (fun n -> "illegal void local " ^ n ^
                                   " in " ^ func.fname) b);
                 let env, name = add_symbol_table env s t in
                 let env = { env with locals = (t, name) :: env.locals } in
@@ -289,4 +366,4 @@ let check (globals, functions) =
 
    
   in
-  (globals, List.map check_function functions)
+  (structs, globals, List.map check_function functions)

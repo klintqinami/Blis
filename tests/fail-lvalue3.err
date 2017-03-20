@@ -1,0 +1,1 @@
+Fatal error: exception Failure("expression my_func() is not an lvalue")

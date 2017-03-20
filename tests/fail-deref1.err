@@ -1,0 +1,1 @@
+Fatal error: exception Failure("struct my_struct does not contain member b in foo.b")

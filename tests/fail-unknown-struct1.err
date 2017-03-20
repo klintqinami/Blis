@@ -1,0 +1,1 @@
+Fatal error: exception Failure("struct bar does not exist in member a of struct foo")

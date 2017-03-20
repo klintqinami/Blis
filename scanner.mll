@@ -20,6 +20,7 @@ rule token = parse
 | '*'      { TIMES }
 | '/'      { DIVIDE }
 | '='      { ASSIGN }
+| '.'      { DOT }
 | "=="     { EQ }
 | "!="     { NEQ }
 | '<'      { LT }
@@ -40,6 +41,7 @@ rule token = parse
 | "float"  { FLOAT }
 | "bool"   { BOOL }
 | "void"   { VOID }
+| "struct" { STRUCT }
 | "true"   { TRUE }
 | "false"  { FALSE }
 | digits as lxm { INT_LITERAL(int_of_string lxm) }

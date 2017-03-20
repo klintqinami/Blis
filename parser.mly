@@ -5,10 +5,10 @@ open Ast
 %}
 
 %token SEMI LPAREN RPAREN LBRACE RBRACE COMMA
-%token PLUS MINUS TIMES DIVIDE ASSIGN NOT
+%token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token INT FLOAT BOOL VOID
+%token INT FLOAT BOOL VOID STRUCT
 %token <int> INT_LITERAL
 %token <float> FLOAT_LITERAL
 %token <string> ID
@@ -24,6 +24,7 @@ open Ast
 %left PLUS MINUS
 %left TIMES DIVIDE
 %right NOT NEG
+%left DOT
 
 %start program
 %type <Ast.program> program
@@ -34,9 +35,10 @@ program:
   decls EOF { $1 }
 
 decls:
-   /* nothing */ { [], [] }
- | decls vdecl { ($2 :: fst $1), snd $1 }
- | decls fdecl { fst $1, ($2 :: snd $1) }
+  /* nothing */ { { struct_decls = []; var_decls = []; func_decls = []; } }
+ | decls vdecl { { $1 with var_decls = $2 :: $1.var_decls; } }
+ | decls fdecl { { $1 with func_decls = $2 :: $1.func_decls; } }
+ | decls sdecl { { $1 with struct_decls = $2 :: $1.struct_decls; } }
 
 fdecl:
    typ ID LPAREN formals_opt RPAREN LBRACE stmt_list RBRACE
@@ -47,6 +49,16 @@ fdecl:
 
 vdecl:
     typ ID SEMI { ($1, $2) }
+
+vdecl_list:
+    /* nothing */ { [] }
+  | vdecl_list vdecl { $2 :: $1 }
+
+sdecl:
+    STRUCT ID LBRACE vdecl_list RBRACE SEMI { {
+      sname = $2;
+      members = List.rev $4;
+    } }
 
 formals_opt:
     /* nothing */ { [] }
@@ -60,6 +72,7 @@ typ:
     INT { Int }
   | FLOAT { Float }
   | BOOL { Bool }
+  | ID { Struct($1) }
   | VOID { Void }
 
 stmt_list:
@@ -91,6 +104,7 @@ expr:
   | TRUE             { BoolLit(true) }
   | FALSE            { BoolLit(false) }
   | ID               { Id($1) }
+  | expr DOT    ID   { Deref($1, $3) }
   | expr PLUS   expr { Binop($1, Add,   $3) }
   | expr MINUS  expr { Binop($1, Sub,   $3) }
   | expr TIMES  expr { Binop($1, Mult,  $3) }
