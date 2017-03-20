@@ -80,6 +80,14 @@ let check program =
     StringMap.add s.sname s m) StringMap.empty structs
   in
 
+  let check_return_type exceptf = function
+      (Struct s) -> if not (StringMap.mem s struct_decls) then
+          raise (Failure (exceptf s))
+        else
+          ()
+    | _ -> ()
+  in
+
   (* Raise an exception if a given binding is to a void type or a struct that
    * doesn't exist *)
   let check_type bad_struct void = function
@@ -180,6 +188,10 @@ let check program =
         func.fname)
       (fun n -> "illegal void formal " ^ n ^ " in " ^ func.fname))
     func.formals;
+
+    check_return_type
+      (fun s -> "struct " ^ s ^ " does not exist in return type of function " ^
+      func.fname) func.typ;
 
     report_duplicate (fun n -> "duplicate formal " ^ n ^ " in " ^ func.fname)
       (List.map snd func.formals);
