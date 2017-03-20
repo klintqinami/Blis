@@ -37,7 +37,7 @@ let translate (globals, functions) =
   (* Declare each global variable; remember its value in a map *)
   let global_vars =
     let global_var m (t, n) =
-      let init = L.const_int (ltype_of_typ t) 0
+      let init = L.undef (ltype_of_typ t)
       in StringMap.add n (L.define_global n init the_module) m in
     List.fold_left global_var StringMap.empty globals in
 
