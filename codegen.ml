@@ -18,6 +18,16 @@ module SA = Sast
 
 module StringMap = Map.Make(String)
 
+(* helper function that returns the index of an element in a list
+ * why isn't this a stdlib function?
+ *)
+let index_of e l =
+  let rec index_of' i = function
+      [] -> raise Not_found
+    | hd :: tl -> if hd = e then i else index_of' (i + 1) tl
+  in
+index_of' 0 l
+
 let translate ((structs, globals, functions) : SA.sprogram) =
   let context = L.global_context () in
   let the_module = L.create_module context "MicroC"
@@ -27,6 +37,17 @@ let translate ((structs, globals, functions) : SA.sprogram) =
   and f32_t  = L.float_type context
   and f64_t  = L.double_type context
   and void_t = L.void_type context in
+
+  let make_vec_t base =
+    [| base; L.array_type base 2;
+             L.array_type base 3;
+             L.array_type base 4 |]
+  in
+
+
+  let vec_t = make_vec_t f32_t in
+  let ivec_t = make_vec_t i32_t in
+  let bvec_t = make_vec_t i1_t in
 
   (* construct struct types *)
   let struct_decls = List.fold_left (fun m s ->
@@ -38,9 +59,9 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     StringMap.empty structs in
 
   let ltype_of_typ = function
-      A.Int -> i32_t
-    | A.Float -> f32_t
-    | A.Bool -> i1_t
+    | A.Vec(A.Float, w) -> vec_t.(w-1)
+    | A.Vec(A.Int, w) -> ivec_t.(w-1)
+    | A.Vec(A.Bool, w) -> bvec_t.(w-1)
     | A.Struct s -> StringMap.find s struct_types
     | A.Void -> void_t in
 
@@ -101,16 +122,6 @@ let translate ((structs, globals, functions) : SA.sprogram) =
                    with Not_found -> StringMap.find n global_vars
     in
 
-    (* helper function that returns the index of an element in a list
-     * why isn't this a stdlib function?
-     *)
-    let index_of e l =
-      let rec index_of' i = function
-          [] -> raise Not_found
-        | hd :: tl -> if hd = e then i else index_of' (i + 1) tl
-      in
-    index_of' 0 l
-    in
 
     (* evaluates an expression and returns a pointer to its value. If the
      * expression is an lvalue, guarantees that the pointer is to the memory
@@ -125,6 +136,14 @@ let translate ((structs, globals, functions) : SA.sprogram) =
                 let decl = StringMap.find s struct_decls in
                 L.build_struct_gep e'
                   (index_of m (List.map snd decl.A.members))
+                  "tmp" builder
+            | A.Vec (_, _) ->
+                L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t (match m with
+                    "x" -> 0
+                  | "y" -> 1
+                  | "z" -> 2
+                  | "w" -> 3
+                  | _ -> raise (Failure "shouldn't get here"))|]
                   "tmp" builder
             | _ -> raise (Failure "unexpected type"))
       | _ -> let e' = expr builder sexpr in
@@ -192,6 +211,14 @@ let translate ((structs, globals, functions) : SA.sprogram) =
 	 let result = (match fdecl.SA.styp with A.Void -> ""
                                             | _ -> f ^ "_result") in
          L.build_call fdef (Array.of_list actuals) result builder
+      | SA.STypeCons act ->
+          match fst sexpr with
+              A.Vec(_, _) -> fst (List.fold_left (fun (agg, idx) e ->
+                let e' = expr builder e in
+                (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
+              ((L.undef (ltype_of_typ (fst sexpr))), 0) act)
+            | _ -> raise (Failure "shouldn't get here")
+
     in
 
     (* Build a list of statments, and invoke "f builder" if the list doesn't

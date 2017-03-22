@@ -8,7 +8,8 @@ open Ast
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token INT FLOAT BOOL VOID STRUCT
+%token INT BOOL VOID STRUCT
+%token <int> FLOAT
 %token <int> INT_LITERAL
 %token <float> FLOAT_LITERAL
 %token <string> ID
@@ -69,9 +70,9 @@ formal_list:
   | formal_list COMMA typ ID { ($3,$4) :: $1 }
 
 typ:
-    INT { Int }
-  | FLOAT { Float }
-  | BOOL { Bool }
+    INT { Vec(Int, 1) }
+  | FLOAT { Vec(Float, $1) }
+  | BOOL { Vec(Bool, 1) }
   | ID { Struct($1) }
   | VOID { Void }
 
@@ -120,7 +121,7 @@ expr:
   | MINUS expr %prec NEG { Unop(Neg, $2) }
   | NOT expr         { Unop(Not, $2) }
   | expr ASSIGN expr   { Assign($1, $3) }
-  | ID LPAREN actuals_opt RPAREN { Call($1, $3) }
+  | typ LPAREN actuals_opt RPAREN { TypeConsOrCall($1, $3) }
   | LPAREN expr RPAREN { $2 }
 
 actuals_opt:

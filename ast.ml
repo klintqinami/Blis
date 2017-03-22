@@ -5,7 +5,9 @@ type op = Add | Sub | Mult | Div | Equal | Neq | Less | Leq | Greater | Geq |
 
 type uop = Neg | Not
 
-type typ = Int | Float | Bool | Struct of string | Void
+type base_type = Float | Int | Bool
+
+type typ = Vec of base_type * int | Struct of string | Void
 
 type bind = typ * string
 
@@ -18,7 +20,7 @@ type expr =
   | Binop of expr * op * expr
   | Unop of uop * expr
   | Assign of expr * expr
-  | Call of string * expr list
+  | TypeConsOrCall of typ * expr list
   | Noexpr
 
 type stmt =
@@ -70,6 +72,16 @@ let string_of_uop = function
     Neg -> "-"
   | Not -> "!"
 
+let string_of_typ = function
+    Vec(Bool, 1) -> "bool"
+  | Vec(Int, 1) -> "int"
+  | Vec(Float, 1) -> "float"
+  | Vec(Bool, w) -> "bvec" ^ string_of_int w
+  | Vec(Int, w) -> "ivec" ^ string_of_int w
+  | Vec(Float, w) -> "vec" ^ string_of_int w
+  | Struct s -> s
+  | Void -> "void"
+
 let rec string_of_expr = function
     IntLit(l) -> string_of_int l
   | FloatLit(l) -> string_of_float l
@@ -81,16 +93,9 @@ let rec string_of_expr = function
       string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
   | Unop(o, e) -> string_of_uop o ^ string_of_expr e
   | Assign(v, e) -> string_of_expr v ^ " = " ^ string_of_expr e
-  | Call(f, el) ->
-      f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
+  | TypeConsOrCall(t, el) ->
+      string_of_typ t ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Noexpr -> ""
-
-let string_of_typ = function
-    Int -> "int"
-  | Float -> "float"
-  | Bool -> "bool"
-  | Struct s -> s
-  | Void -> "void"
 
 let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
 

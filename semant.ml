@@ -67,7 +67,7 @@ let check program =
   (* Raise an exception of the given rvalue type cannot be assigned to
      the given lvalue type *)
   let check_assign lvaluet rvaluet err =
-     if lvaluet == rvaluet then lvaluet else raise err
+     if lvaluet = rvaluet then lvaluet else raise err
   in
 
   (**** Checking Structure Declarations ****)
@@ -163,11 +163,11 @@ let check program =
 
   (* Function declaration for a named function *)
   let built_in_decls =  [
-     { typ = Void; fname = "print"; formals = [(Int, "x")];
+     { typ = Void; fname = "print"; formals = [(Vec(Int, 1), "x")];
        body = [] };
-     { typ = Void; fname = "printb"; formals = [(Bool, "x")];
+     { typ = Void; fname = "printb"; formals = [(Vec(Bool, 1), "x")];
        body = [] };
-     { typ = Void; fname = "printf"; formals = [(Float, "x")];
+     { typ = Void; fname = "printf"; formals = [(Vec(Float, 1), "x")];
        body = [] }]
    in
      
@@ -208,6 +208,13 @@ let check program =
                 with Not_found ->
                   raise (Failure ("struct " ^ s ^ " does not contain member " ^
                     m ^ " in " ^ string_of_expr d)))
+            | Vec(b, w) ->
+                (match m with
+                    "x" | "y" when w >= 2 -> Vec(b, 1)
+                  | "z" when w >= 3 -> Vec(b, 1)
+                  | "w" when w = 4 -> Vec(b, 1)
+                  | _ -> raise (Failure ("dereference of nonexistant member " ^ m ^
+                      " of a vector")))
             | _ -> raise (Failure ("illegal dereference of type " ^
                 string_of_typ typ ^ " in " ^ string_of_expr d)))
           , SDeref(e', m))
@@ -219,37 +226,37 @@ let check program =
 
     (* Return the type of an expression and new expression or throw an exception *)
     and expr (env : translation_environment) = function
-	IntLit(l) -> (Int, SIntLit(l))
-      | FloatLit(l) -> (Float, SFloatLit(l))
-      | BoolLit(l) -> (Bool, SBoolLit(l))
+	IntLit(l) -> (Vec(Int, 1), SIntLit(l))
+      | FloatLit(l) -> (Vec(Float, 1), SFloatLit(l))
+      | BoolLit(l) -> (Vec(Bool, 1), SBoolLit(l))
       | Id _ | Deref(_, _) as e -> lvalue false env e
       | Binop(e1, op, e2) as e -> let e1 = expr env e1 and e2 = expr env e2 in
         let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op with
-            Add when t1 = Int && t2 = Int -> (Int, IAdd)
-          | Sub when t1 = Int && t2 = Int -> (Int, ISub)
-          | Mult when t1 = Int && t2 = Int -> (Int, IMult)
-          | Div when t1 = Int && t2 = Int -> (Int, IDiv)
-          | Equal when t1 = Int && t2 = Int -> (Bool, IEqual)
-          | Neq when t1 = Int && t2 = Int -> (Bool, INeq)
-          | Add when t1 = Float && t2 = Float -> (Float, FAdd)
-          | Sub when t1 = Float && t2 = Float -> (Float, FSub)
-          | Mult when t1 = Float && t2 = Float -> (Float, FMult)
-          | Div when t1 = Float && t2 = Float -> (Float, FDiv)
-          | Equal when t1 = Float && t2 = Float -> (Bool, FEqual)
-          | Neq when t1 = Float && t2 = Float -> (Bool, FNeq)
-          | Less when t1 = Float && t2 = Float -> (Bool, FLess)
-          | Leq when t1 = Float && t2 = Float -> (Bool, FLeq)
-          | Greater when t1 = Float && t2 = Float -> (Bool, FGreater)
-          | Geq when t1 = Float && t2 = Float -> (Bool, FGeq)
-          | Equal when t1 = Bool && t2 = Bool -> (Bool, BEqual)
-          | Neq when t1 = Bool && t2 = Bool -> (Bool, BNeq)
-          | Less when t1 = Int && t2 = Int -> (Bool, ILess)
-          | Leq when t1 = Int && t2 = Int -> (Bool, ILeq)
-          | Greater when t1 = Int && t2 = Int -> (Bool, IGreater)
-          | Geq when t1 = Int && t2 = Int -> (Bool, IGeq)
-          | And when t1 = Bool && t2 = Bool -> (Bool, BAnd)
-          | Or when t1 = Bool && t2 = Bool -> (Bool, BOr)
+            Add when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), IAdd)
+          | Sub when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), ISub)
+          | Mult when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), IMult)
+          | Div when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), IDiv)
+          | Equal when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), IEqual)
+          | Neq when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), INeq)
+          | Add when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FAdd)
+          | Sub when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FSub)
+          | Mult when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FMult)
+          | Div when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FDiv)
+          | Equal when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FEqual)
+          | Neq when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FNeq)
+          | Less when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FLess)
+          | Leq when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FLeq)
+          | Greater when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FGreater)
+          | Geq when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FGeq)
+          | Equal when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BEqual)
+          | Neq when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BNeq)
+          | Less when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), ILess)
+          | Leq when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), ILeq)
+          | Greater when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), IGreater)
+          | Geq when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), IGeq)
+          | And when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BAnd)
+          | Or when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BOr)
           | _ -> raise (Failure ("illegal binary operator " ^
                 string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
                 string_of_typ t2 ^ " in " ^ string_of_expr e))
@@ -258,9 +265,9 @@ let check program =
       | Unop(op, e) as ex -> let e = expr env e in
          let t = fst e in
 	 (match op with
-	   Neg when t = Int -> (Int, SUnop(INeg, e))
-	 | Neg when t = Float -> (Int, SUnop(FNeg, e))
-	 | Not when t = Bool -> (Bool, SUnop(BNot, e))
+	   Neg when t = Vec(Int, 1) -> (Vec(Int, 1), SUnop(INeg, e))
+	 | Neg when t = Vec(Float, 1) -> (Vec(Float, 1), SUnop(FNeg, e))
+	 | Not when t = Vec(Bool, 1) -> (Vec(Bool, 1), SUnop(BNot, e))
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
       | Noexpr -> (Void, SNoexpr)
@@ -271,24 +278,46 @@ let check program =
         (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
 				      " = " ^ string_of_typ rt ^ " in " ^ 
 				      string_of_expr ex)), SAssign(lval, e))
-      | Call(fname, actuals) as call -> let fd = function_decl fname in
-         if List.length actuals != List.length fd.formals then
-           raise (Failure ("expecting " ^ string_of_int
-             (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
-         else
-           (fd.typ, SCall(fname,
-              List.map2 (fun (ft, _) e -> let se = expr env e in
-                let et = fst se in
-                ignore (check_assign ft et
-                  (Failure ("illegal actual argument found " ^ string_of_typ et ^
-                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
-                se)
-              fd.formals actuals))
+      | TypeConsOrCall(typ, actuals) as call ->
+          match typ with
+              (* struct constructors and functions are in the same namespace,
+               * and we'll handle struct constructors as regular functions
+               * anyways.
+               *)
+              Struct fname -> let fd = function_decl fname in
+                if List.length actuals != List.length fd.formals then
+                  raise (Failure ("expecting " ^ string_of_int
+                    (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
+                else
+                  (fd.typ, SCall(fd.fname,
+                    List.map2 (fun (ft, _) e -> let se = expr env e in
+                      let et = fst se in
+                      ignore (check_assign ft et
+                        (Failure ("illegal actual argument found " ^ string_of_typ et ^
+                        " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
+                      se)
+                    fd.formals actuals))
+            | Vec(b, w) ->
+                if List.length actuals != w then
+                  raise (Failure ("expecting " ^ string_of_int w ^
+                   " arguments in constructor for " ^ string_of_typ typ))
+                else (typ, STypeCons(List.map (fun e ->
+                  let se = expr env e in
+                  let atyp = fst se in
+                  if atyp <> Vec(b, 1) then
+                    raise (Failure ("expecting type " ^
+                      string_of_typ (Vec (b, 1)) ^
+                      " in constructor for " ^ string_of_typ typ))
+                  else
+                    se) actuals))
+            | _ -> raise (Failure ("unhandled type constructor for " ^
+                      string_of_typ typ));
+                  
     in
 
     let check_bool_expr env e =
       let se = expr env e in 
-        if fst se != Bool then
+        if fst se <> Vec(Bool, 1) then
           raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
         else se in
 

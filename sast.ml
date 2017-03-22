@@ -19,6 +19,7 @@ type sexpr_detail =
   | SBinop of sexpr * sop * sexpr
   | SUnop of suop * sexpr
   | SAssign of sexpr * sexpr
+  | STypeCons of sexpr list
   | SCall of string * sexpr list
   | SNoexpr
 
@@ -76,6 +77,9 @@ let rec string_of_sexpr (s : sexpr) = match snd s with
   | SAssign(v, e) -> string_of_sexpr v ^ " = " ^ string_of_sexpr e
   | SCall(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ")"
+  | STypeCons(el) ->
+      string_of_typ (fst s) ^ "(" ^
+      String.concat ", " (List.map string_of_sexpr el) ^ ")"
   | SNoexpr -> ""
 
 let rec string_of_sstmt = function

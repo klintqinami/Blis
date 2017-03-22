@@ -23,7 +23,7 @@ clean :
 OBJS = ast.cmx codegen.cmx parser.cmx scanner.cmx semant.cmx microc.cmx
 
 microc : $(OBJS)
-	ocamlfind ocamlopt -linkpkg -package llvm -package llvm.analysis $(OBJS) -o microc
+	ocamlfind ocamlopt -linkpkg -package llvm -package llvm.analysis -package core $(OBJS) -o microc
 
 scanner.ml : scanner.mll
 	ocamllex scanner.mll

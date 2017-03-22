@@ -38,7 +38,13 @@ rule token = parse
 | "break"  { BREAK }
 | "continue" { CONTINUE }
 | "int"    { INT }
-| "float"  { FLOAT }
+| "float"  { FLOAT(1) }
+| "vec" (digits as width) {
+  let width = int_of_string width in
+  if width < 2 || width > 4 then
+    raise (Failure("vecN with N not between 2 and 4"))
+  else
+    FLOAT(width) }
 | "bool"   { BOOL }
 | "void"   { VOID }
 | "struct" { STRUCT }

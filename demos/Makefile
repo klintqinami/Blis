@@ -1,5 +1,5 @@
 triangle: triangle.c
-	cc -lGLEW -lGL -lglfw -o triangle triangle.c
+	cc -o triangle triangle.c -lGLEW -lGL -lglfw 
 
 clean:
 	rm triangle

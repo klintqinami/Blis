@@ -1,1 +1,1 @@
-Fatal error: exception Failure("illegal dereference of type int in foo.a")
+Fatal error: exception Failure("dereference of nonexistant member a of a vector")
