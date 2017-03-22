@@ -67,7 +67,7 @@ let check program =
   (* Raise an exception of the given rvalue type cannot be assigned to
      the given lvalue type *)
   let check_assign lvaluet rvaluet err =
-     if lvaluet == rvaluet then lvaluet else raise err
+     if lvaluet = rvaluet then lvaluet else raise err
   in
 
   (**** Checking Structure Declarations ****)
@@ -135,6 +135,21 @@ let check program =
     ignore (tsort [] [] (List.map (fun s -> s.sname) structs))
   in
    
+  (* Add struct constructors to function declarations *)
+  let functions = List.fold_left (fun functions s -> 
+    {typ = Struct(s.sname); 
+      fname = s.sname; 
+      formals = s.members; 
+      body = Local((Struct(s.sname), "tmp"), None) ::
+        (List.map (fun m -> 
+          Expr(Assign(Deref(Id("tmp"), snd m), Id(snd m)))) s.members) 
+        @ [Return(Id("tmp"))];
+    } :: functions      
+    )
+    functions structs
+  in
+  
+
   (**** Checking Global Variables ****)
 
   List.iter (check_type
