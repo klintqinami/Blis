@@ -5,7 +5,7 @@ struct foo {
 
 int main()
 {
-  foo bar;
+  struct foo bar;
   bar.a = 42;
   bar.b = 1;
   print(bar.a + bar.b);

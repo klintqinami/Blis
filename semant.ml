@@ -90,11 +90,12 @@ let check program =
 
   (* Raise an exception if a given binding is to a void type or a struct that
    * doesn't exist *)
-  let check_type bad_struct void = function
+  let rec check_type bad_struct void = function
       (Struct s, n) -> if not (StringMap.mem s struct_decls) then
           raise (Failure (bad_struct s n))
         else
           ()
+    | (Array(t, _), n) -> check_type bad_struct void (t, n)
     | (Void, n) -> raise (Failure (void n))
     | _ -> ()
   in
@@ -142,7 +143,7 @@ let check program =
       formals = List.map (fun b -> (In, b)) s.members; 
       body = Local((Struct(s.sname), "tmp"), None) ::
         (List.map (fun m -> 
-          Expr(Assign(Deref(Id("tmp"), snd m), Id(snd m)))) s.members) 
+          Expr(Assign(StructDeref(Id("tmp"), snd m), Id(snd m)))) s.members) 
         @ [Return(Id("tmp"))];
     } :: functions      
     )
@@ -213,7 +214,7 @@ let check program =
 
     let rec lvalue need_lvalue env = function
         Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
-      | Deref(e, m) as d -> let e' = lvalue need_lvalue env e in
+      | StructDeref(e, m) as d -> let e' = lvalue need_lvalue env e in
           let typ = fst e' in
           ((match typ with
               Struct s ->
@@ -232,7 +233,17 @@ let check program =
                       " of a vector")))
             | _ -> raise (Failure ("illegal dereference of type " ^
                 string_of_typ typ ^ " in " ^ string_of_expr d)))
-          , SDeref(e', m))
+          , SStructDeref(e', m))
+      | ArrayDeref(e, i) as d ->
+          let e' = lvalue need_lvalue env e and i' = expr env i in
+          if fst i' <> Vec(Int, 1) then
+            raise (Failure ("index expression of of type " ^
+              string_of_typ (fst i') ^ " instead of int in " ^
+              string_of_expr d))
+          else (match fst e' with
+              Array(t, _) -> (t, SArrayDeref(e', i'))
+            | _ -> raise (Failure ("array dereference of non-array type in " ^
+                      string_of_expr d)))
       | _ as e ->
           if need_lvalue then
             raise (Failure ("expression " ^ string_of_expr e ^ " is not an lvalue"))
@@ -244,7 +255,7 @@ let check program =
 	IntLit(l) -> (Vec(Int, 1), SIntLit(l))
       | FloatLit(l) -> (Vec(Float, 1), SFloatLit(l))
       | BoolLit(l) -> (Vec(Bool, 1), SBoolLit(l))
-      | Id _ | Deref(_, _) as e -> lvalue false env e
+      | Id _ | StructDeref(_, _) | ArrayDeref(_, _) as e -> lvalue false env e
       | Binop(e1, op, e2) as e -> let e1 = expr env e1 and e2 = expr env e2 in
         let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op with
@@ -293,42 +304,44 @@ let check program =
         (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
 				      " = " ^ string_of_typ rt ^ " in " ^ 
 				      string_of_expr ex)), SAssign(lval, e))
-      | TypeConsOrCall(typ, actuals) as call ->
+      | Call(fname, actuals) as call -> let fd = function_decl fname in
+          if List.length actuals != List.length fd.formals then
+            raise (Failure ("expecting " ^ string_of_int
+              (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
+          else
+            (fd.typ, SCall(fd.fname,
+              List.map2 (fun (fq, (ft, _)) e ->
+                let se = if fq = In then
+                  expr env e
+                else
+                  lvalue true env e in
+                let et = fst se in
+                ignore (check_assign ft et
+                  (Failure ("illegal actual argument found " ^ string_of_typ et ^
+                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
+                se)
+              fd.formals actuals))
+      | TypeCons(typ, actuals) ->
+          let handle_array_vec base_type size =
+            if List.length actuals != size then
+              raise (Failure ("expecting " ^ string_of_int size ^
+               " arguments in constructor for " ^ string_of_typ typ))
+            else (typ, STypeCons(List.map (fun e ->
+              let se = expr env e in
+              let atyp = fst se in
+              ignore (check_assign base_type atyp
+                (Failure ("expecting type " ^ string_of_typ base_type ^
+                  " in constructor for " ^ string_of_typ typ)));
+              se) actuals))
+          in
           match typ with
               (* struct constructors and functions are in the same namespace,
                * and we'll handle struct constructors as regular functions
                * anyways.
                *)
-              Struct fname -> let fd = function_decl fname in
-                if List.length actuals != List.length fd.formals then
-                  raise (Failure ("expecting " ^ string_of_int
-                    (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
-                else
-                  (fd.typ, SCall(fd.fname,
-                    List.map2 (fun (fq, (ft, _)) e ->
-                      let se = if fq = In then
-                        expr env e
-                      else
-                        lvalue true env e in
-                      let et = fst se in
-                      ignore (check_assign ft et
-                        (Failure ("illegal actual argument found " ^ string_of_typ et ^
-                        " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
-                      se)
-                    fd.formals actuals))
-            | Vec(b, w) ->
-                if List.length actuals != w then
-                  raise (Failure ("expecting " ^ string_of_int w ^
-                   " arguments in constructor for " ^ string_of_typ typ))
-                else (typ, STypeCons(List.map (fun e ->
-                  let se = expr env e in
-                  let atyp = fst se in
-                  if atyp <> Vec(b, 1) then
-                    raise (Failure ("expecting type " ^
-                      string_of_typ (Vec (b, 1)) ^
-                      " in constructor for " ^ string_of_typ typ))
-                  else
-                    se) actuals))
+            | Struct s -> expr env (Call(s, actuals))
+            | Vec(b, w) -> handle_array_vec (Vec(b, 1)) w
+            | Array(t, s) -> handle_array_vec t s
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));
                   

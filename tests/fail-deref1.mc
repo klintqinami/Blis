@@ -4,6 +4,6 @@ struct my_struct {
 
 int main()
 {
-  my_struct foo;
+  struct my_struct foo;
   foo.b = 0;
 }

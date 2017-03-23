@@ -1,5 +1,5 @@
 struct foo {
-  bar a;
+  struct bar a;
 };
 
 int main()

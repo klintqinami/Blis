@@ -58,11 +58,12 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     StringMap.add s.A.sname (L.named_struct_type context s.A.sname) m)
     StringMap.empty structs in
 
-  let ltype_of_typ = function
+  let rec ltype_of_typ = function
     | A.Vec(A.Float, w) -> vec_t.(w-1)
     | A.Vec(A.Int, w) -> ivec_t.(w-1)
     | A.Vec(A.Bool, w) -> bvec_t.(w-1)
     | A.Struct s -> StringMap.find s struct_types
+    | A.Array(t, s) -> L.array_type (ltype_of_typ t) s
     | A.Void -> void_t in
 
   List.iter (fun s ->
@@ -135,7 +136,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
      *)
     let rec lvalue builder sexpr = match snd sexpr with
         SA.SId s -> lookup s
-      | SA.SDeref (e, m) ->
+      | SA.SStructDeref (e, m) ->
           let e' = lvalue builder e in
           (match fst e with
               A.Struct s ->
@@ -152,6 +153,10 @@ let translate ((structs, globals, functions) : SA.sprogram) =
                   | _ -> raise (Failure "shouldn't get here"))|]
                   "tmp" builder
             | _ -> raise (Failure "unexpected type"))
+      | SA.SArrayDeref (e, i) ->
+          let e' = lvalue builder e in
+          let i' = expr builder i in
+          L.build_gep e' [| L.const_int i32_t 0; i' |] "tmp" builder
       | _ -> let e' = expr builder sexpr in
           let temp =
             L.build_alloca (ltype_of_typ (fst sexpr)) "expr_tmp" builder in
@@ -163,7 +168,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
       | SA.SFloatLit f -> L.const_float f32_t f
       | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
       | SA.SNoexpr -> L.const_int i32_t 0
-      | SA.SId _ | SA.SDeref (_, _) ->
+      | SA.SId _ | SA.SStructDeref (_, _) | SA.SArrayDeref (_, _) ->
           L.build_load (lvalue builder sexpr) "load_tmp" builder
       | SA.SBinop (e1, op, e2) ->
 	  let e1' = expr builder e1
@@ -221,9 +226,10 @@ let translate ((structs, globals, functions) : SA.sprogram) =
          L.build_call fdef (Array.of_list actuals) result builder
       | SA.STypeCons act ->
           match fst sexpr with
-              A.Vec(_, _) -> fst (List.fold_left (fun (agg, idx) e ->
-                let e' = expr builder e in
-                (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
+              A.Vec(_, _) | A.Array(_, _) ->
+                fst (List.fold_left (fun (agg, idx) e ->
+                  let e' = expr builder e in
+                  (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
               ((L.undef (ltype_of_typ (fst sexpr))), 0) act)
             | _ -> raise (Failure "shouldn't get here")
 

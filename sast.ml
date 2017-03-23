@@ -15,7 +15,8 @@ type sexpr_detail =
   | SFloatLit of float
   | SBoolLit of bool
   | SId of string
-  | SDeref of sexpr * string
+  | SStructDeref of sexpr * string
+  | SArrayDeref of sexpr * sexpr
   | SBinop of sexpr * sop * sexpr
   | SUnop of suop * sexpr
   | SAssign of sexpr * sexpr
@@ -70,7 +71,8 @@ let rec string_of_sexpr (s : sexpr) = match snd s with
   | SBoolLit(true) -> "true"
   | SBoolLit(false) -> "false"
   | SId(s) -> s
-  | SDeref(e, m) -> string_of_sexpr e ^ "." ^ m
+  | SStructDeref(e, m) -> string_of_sexpr e ^ "." ^ m
+  | SArrayDeref(e, i) -> string_of_sexpr e ^ "[" ^ string_of_sexpr i ^ "]"
   | SBinop(e1, o, e2) ->
       string_of_sexpr e1 ^ " " ^ string_of_sop o ^ " " ^ string_of_sexpr e2
   | SUnop(o, e) -> string_of_suop o ^ string_of_sexpr e

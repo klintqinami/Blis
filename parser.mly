@@ -4,7 +4,11 @@
 open Ast
 %}
 
-%token SEMI LPAREN RPAREN LBRACE RBRACE COMMA
+%token SEMI
+%token LPAREN RPAREN
+%token LBRACE RBRACE
+%token LBRACKET RBRACKET
+%token COMMA
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
@@ -26,7 +30,7 @@ open Ast
 %left PLUS MINUS
 %left TIMES DIVIDE
 %right NOT NEG
-%left DOT
+%left DOT LPAREN LBRACKET
 
 %start program
 %type <Ast.program> program
@@ -50,7 +54,7 @@ fdecl:
 	 body = List.rev $7 } }
 
 vdecl:
-    typ ID SEMI { ($1, $2) }
+    bind SEMI { $1 }
 
 vdecl_list:
     /* nothing */ { [] }
@@ -67,21 +71,30 @@ formals_opt:
   | formal_list   { List.rev $1 }
 
 formal_list:
-    formal_qualifier typ ID                   { [($1,($2,$3))] }
-  | formal_list COMMA formal_qualifier typ ID { ($3,($4,$5)) :: $1 }
+    formal_qualifier bind                   { [($1,$2)] }
+  | formal_list COMMA formal_qualifier bind { ($3,$4) :: $1 }
 
 formal_qualifier:
     /* nothing */ { In }
   | OUT { Out }
   | INOUT {Inout}
   
+arrays:
+    /* nothing */ { [] }
+  | arrays LBRACKET INT_LITERAL RBRACKET { $3 :: $1 }
 
-typ:
+no_array_typ:
     INT { Vec(Int, 1) }
   | FLOAT { Vec(Float, $1) }
   | BOOL { Vec(Bool, 1) }
-  | ID { Struct($1) }
+  | STRUCT ID { Struct($2) }
   | VOID { Void }
+
+typ:
+    no_array_typ arrays { List.fold_left (fun t len -> Array(t, len)) $1 $2 }
+
+bind:
+  typ ID { ($1, $2) }
 
 stmt_list:
     /* nothing */  { [] }
@@ -89,8 +102,8 @@ stmt_list:
 
 stmt:
     expr SEMI { Expr $1 }
-  | typ ID SEMI { Local (($1, $2), None) }
-  | typ ID ASSIGN expr SEMI { Local (($1, $2), Some $4) }
+  | bind SEMI { Local ($1, None) }
+  | bind ASSIGN expr SEMI { Local ($1, Some $3) }
   | RETURN SEMI { Return Noexpr }
   | RETURN expr SEMI { Return $2 }
   | BREAK SEMI { Break }
@@ -112,7 +125,8 @@ expr:
   | TRUE             { BoolLit(true) }
   | FALSE            { BoolLit(false) }
   | ID               { Id($1) }
-  | expr DOT    ID   { Deref($1, $3) }
+  | expr DOT    ID   { StructDeref($1, $3) }
+  | expr LBRACKET expr RBRACKET { ArrayDeref($1, $3) }
   | expr PLUS   expr { Binop($1, Add,   $3) }
   | expr MINUS  expr { Binop($1, Sub,   $3) }
   | expr TIMES  expr { Binop($1, Mult,  $3) }
@@ -128,7 +142,8 @@ expr:
   | MINUS expr %prec NEG { Unop(Neg, $2) }
   | NOT expr         { Unop(Not, $2) }
   | expr ASSIGN expr   { Assign($1, $3) }
-  | typ LPAREN actuals_opt RPAREN { TypeConsOrCall($1, $3) }
+  | typ LPAREN actuals_opt RPAREN { TypeCons($1, $3) }
+  | ID LPAREN actuals_opt RPAREN { Call($1, $3) }
   | LPAREN expr RPAREN { $2 }
 
 actuals_opt:

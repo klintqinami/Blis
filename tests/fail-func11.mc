@@ -2,7 +2,7 @@ int foo() {}
 
 int bar() {
   int a;
-  foo b; /* Error: unknown struct foo */
+  struct foo b; /* Error: unknown struct foo */
   bool c;
 
   return 0;

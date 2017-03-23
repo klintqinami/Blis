@@ -2,8 +2,8 @@ struct foo {
   int a;
 };
 
-foo my_func() {
-  foo ret;
+struct foo my_func() {
+  struct foo ret;
   ret.a = 0;
   return ret;
 }

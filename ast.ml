@@ -7,7 +7,7 @@ type uop = Neg | Not
 
 type base_type = Float | Int | Bool
 
-type typ = Vec of base_type * int | Struct of string | Void
+type typ = Vec of base_type * int | Array of typ * int | Struct of string | Void
 
 type bind = typ * string
 
@@ -16,11 +16,13 @@ type expr =
   | FloatLit of float
   | BoolLit of bool
   | Id of string
-  | Deref of expr * string
+  | StructDeref of expr * string
+  | ArrayDeref of expr * expr
   | Binop of expr * op * expr
   | Unop of uop * expr
   | Assign of expr * expr
-  | TypeConsOrCall of typ * expr list
+  | TypeCons of typ * expr list
+  | Call of string * expr list
   | Noexpr
 
 type stmt =
@@ -77,7 +79,7 @@ let string_of_uop = function
     Neg -> "-"
   | Not -> "!"
 
-let string_of_typ = function
+let rec string_of_typ = function
     Vec(Bool, 1) -> "bool"
   | Vec(Int, 1) -> "int"
   | Vec(Float, 1) -> "float"
@@ -85,6 +87,7 @@ let string_of_typ = function
   | Vec(Int, w) -> "ivec" ^ string_of_int w
   | Vec(Float, w) -> "vec" ^ string_of_int w
   | Struct s -> s
+  | Array(t, s) -> string_of_typ t ^ "[" ^ string_of_int s ^ "]"
   | Void -> "void"
 
 let rec string_of_expr = function
@@ -93,13 +96,16 @@ let rec string_of_expr = function
   | BoolLit(true) -> "true"
   | BoolLit(false) -> "false"
   | Id(s) -> s
-  | Deref(e, m) -> string_of_expr e ^ "." ^ m
+  | StructDeref(e, m) -> string_of_expr e ^ "." ^ m
+  | ArrayDeref(e, i) -> string_of_expr e ^ "[" ^ string_of_expr i ^ "]"
   | Binop(e1, o, e2) ->
       string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
   | Unop(o, e) -> string_of_uop o ^ string_of_expr e
   | Assign(v, e) -> string_of_expr v ^ " = " ^ string_of_expr e
-  | TypeConsOrCall(t, el) ->
+  | TypeCons(t, el) ->
       string_of_typ t ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
+  | Call(fname, el) ->
+      fname ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Noexpr -> ""
 
 let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"

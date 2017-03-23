@@ -1,13 +1,13 @@
 struct foo {
-  bar a;
+  struct bar a;
 };
 
 struct bar {
-  baz b;
+  struct baz b;
 };
 
 struct baz {
-  foo c;
+  struct foo c;
 };
 
 int main()
