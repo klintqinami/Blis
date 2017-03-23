@@ -139,7 +139,7 @@ let check program =
   let functions = List.fold_left (fun functions s -> 
     {typ = Struct(s.sname); 
       fname = s.sname; 
-      formals = s.members; 
+      formals = List.map (fun b -> (In, b)) s.members; 
       body = Local((Struct(s.sname), "tmp"), None) ::
         (List.map (fun m -> 
           Expr(Assign(Deref(Id("tmp"), snd m), Id(snd m)))) s.members) 
@@ -178,11 +178,11 @@ let check program =
 
   (* Function declaration for a named function *)
   let built_in_decls =  [
-     { typ = Void; fname = "print"; formals = [(Vec(Int, 1), "x")];
+     { typ = Void; fname = "print"; formals = [In, (Vec(Int, 1), "x")];
        body = [] };
-     { typ = Void; fname = "printb"; formals = [(Vec(Bool, 1), "x")];
+     { typ = Void; fname = "printb"; formals = [In, (Vec(Bool, 1), "x")];
        body = [] };
-     { typ = Void; fname = "printf"; formals = [(Vec(Float, 1), "x")];
+     { typ = Void; fname = "printf"; formals = [In, (Vec(Float, 1), "x")];
        body = [] }]
    in
      
@@ -202,14 +202,14 @@ let check program =
       (fun s n -> "struct " ^ s ^ " does not exist for formal " ^ n ^ " in " ^
         func.fname)
       (fun n -> "illegal void formal " ^ n ^ " in " ^ func.fname))
-    func.formals;
+    (List.map snd func.formals);
 
     check_return_type
       (fun s -> "struct " ^ s ^ " does not exist in return type of function " ^
       func.fname) func.typ;
 
     report_duplicate (fun n -> "duplicate formal " ^ n ^ " in " ^ func.fname)
-      (List.map snd func.formals);
+      (List.map (fun (_, (_, n)) -> n) func.formals);
 
     let rec lvalue need_lvalue env = function
         Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
@@ -305,7 +305,11 @@ let check program =
                     (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
                 else
                   (fd.typ, SCall(fd.fname,
-                    List.map2 (fun (ft, _) e -> let se = expr env e in
+                    List.map2 (fun (fq, (ft, _)) e ->
+                      let se = if fq = In then
+                        expr env e
+                      else
+                        lvalue true env e in
                       let et = fst se in
                       ignore (check_assign ft et
                         (Failure ("illegal actual argument found " ^ string_of_typ et ^
@@ -400,7 +404,7 @@ let check program =
       (env, sstmts) sl
     in
 
-    let env = List.fold_left (fun env (t, s) ->
+    let env = List.fold_left (fun env (_, (t, s)) ->
       fst (add_symbol_table env s t)) env func.formals
     in
 

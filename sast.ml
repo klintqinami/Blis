@@ -37,7 +37,7 @@ type sstmt =
 type sfunc_decl = {
     styp : typ;
     sfname : string;
-    sformals : bind list;
+    sformals : (formal_qualifier * bind) list;
     slocals : bind list;
     sbody : sstmt list;
   }
@@ -99,7 +99,8 @@ and string_of_sstmts stmts =
 
 let string_of_sfdecl fdecl =
   string_of_typ fdecl.styp ^ " " ^
-  fdecl.sfname ^ "(" ^ String.concat ", " (List.map snd fdecl.sformals) ^
+  fdecl.sfname ^ "(" ^ String.concat ", " (List.map (fun (q, (t, n)) ->
+  string_of_fqualifier q ^ " " ^ string_of_typ t ^ " " ^ n) fdecl.sformals) ^
   ")\n{\n" ^
   String.concat "" (List.map string_of_vdecl fdecl.slocals) ^
   String.concat "" (List.map string_of_sstmt fdecl.sbody) ^

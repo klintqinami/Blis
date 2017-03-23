@@ -50,6 +50,8 @@ rule token = parse
 | "struct" { STRUCT }
 | "true"   { TRUE }
 | "false"  { FALSE }
+| "out" { OUT }
+| "inout" { INOUT }
 | digits as lxm { INT_LITERAL(int_of_string lxm) }
 | (digits exp | (digits '.' digits? | '.' digits) exp?) as lxm
   { FLOAT_LITERAL(float_of_string lxm) }

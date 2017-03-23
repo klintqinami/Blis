@@ -34,10 +34,15 @@ type stmt =
   | Break
   | Continue
 
+type formal_qualifier =
+    In
+  | Out
+  | Inout
+
 type func_decl = {
     typ : typ;
     fname : string;
-    formals : bind list;
+    formals : (formal_qualifier * bind) list;
     body : stmt list;
   }
 
@@ -117,9 +122,15 @@ let rec string_of_stmt = function
   | Break -> "break;"
   | Continue -> "continue;"
 
+let string_of_fqualifier = function
+    In -> ""
+  | Out -> "out"
+  | Inout -> "inout" 
+
 let string_of_fdecl fdecl =
   string_of_typ fdecl.typ ^ " " ^
-  fdecl.fname ^ "(" ^ String.concat ", " (List.map snd fdecl.formals) ^
+  fdecl.fname ^ "(" ^ String.concat ", " (List.map (fun (q, (t, n)) ->
+  string_of_fqualifier q ^ " " ^ string_of_typ t ^ " " ^ n) fdecl.formals) ^
   ")\n{\n" ^
   String.concat "" (List.map string_of_stmt fdecl.body) ^
   "}\n"

@@ -87,7 +87,9 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     let function_decl m fdecl =
       let name = fdecl.SA.sfname
       and formal_types =
-	Array.of_list (List.map (fun (t,_) -> ltype_of_typ t) fdecl.SA.sformals)
+	Array.of_list (List.map (fun (q, (t,_)) ->
+          let t' = ltype_of_typ t in
+          if q = A.In then t' else L.pointer_type t') fdecl.SA.sformals)
       in let ftype = L.function_type (ltype_of_typ fdecl.SA.styp) formal_types in
       StringMap.add name (L.define_function name ftype the_module, fdecl) m in
     List.fold_left function_decl StringMap.empty functions in
@@ -100,21 +102,25 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
     let float_format_str = L.build_global_stringptr "%f\n" "fmt" builder in
     
+    let add_formal m (q, (t, n)) p = L.set_value_name n p;
+      let local = L.build_alloca (ltype_of_typ t) n builder in
+      (match q with
+          A.In -> ignore (L.build_store p local builder)
+        | A.Inout -> ignore (L.build_store
+            (L.build_load p "tmp" builder) local builder)
+        | A.Out -> ());
+      StringMap.add n local m in
+
+    let formals = List.fold_left2 add_formal StringMap.empty fdecl.SA.sformals
+        (Array.to_list (L.params the_function)) in
+
     (* Construct the function's "locals": formal arguments and locally
        declared variables.  Allocate each on the stack, initialize their
        value, if appropriate, and remember their values in the "locals" map *)
     let local_vars =
-      let add_formal m (t, n) p = L.set_value_name n p;
-	let local = L.build_alloca (ltype_of_typ t) n builder in
-	ignore (L.build_store p local builder);
-	StringMap.add n local m in
-
       let add_local m (t, n) =
 	let local_var = L.build_alloca (ltype_of_typ t) n builder
 	in StringMap.add n local_var m in
-
-      let formals = List.fold_left2 add_formal StringMap.empty fdecl.SA.sformals
-          (Array.to_list (L.params the_function)) in
       List.fold_left add_local formals fdecl.SA.slocals in
 
     (* Return the value for a variable or formal argument *)
@@ -207,7 +213,9 @@ let translate ((structs, globals, functions) : SA.sprogram) =
 	    "printf" builder
       | SA.SCall (f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in
-	 let actuals = List.rev (List.map (expr builder) (List.rev act)) in
+	 let actuals = List.rev (List.map2 (fun (q, (_, _)) e ->
+           if q = A.In then expr builder e
+           else lvalue builder e) fdecl.SA.sformals (List.rev act)) in
 	 let result = (match fdecl.SA.styp with A.Void -> ""
                                             | _ -> f ^ "_result") in
          L.build_call fdef (Array.of_list actuals) result builder
@@ -221,6 +229,14 @@ let translate ((structs, globals, functions) : SA.sprogram) =
 
     in
 
+    let copy_out_params builder =
+      List.iter2 (fun p (q, (_, n)) ->
+        if q <> A.In then
+          let tmp = L.build_load (StringMap.find n formals) "" builder in
+          ignore (L.build_store tmp p builder))
+      (Array.to_list (L.params the_function)) fdecl.SA.sformals
+    in
+
     (* Build a list of statments, and invoke "f builder" if the list doesn't
      * end with a branch instruction (break, continue, return) *)
     let rec stmts break_bb continue_bb builder sl f =
@@ -232,7 +248,8 @@ let translate ((structs, globals, functions) : SA.sprogram) =
        the statement's successor *)
     and stmt break_bb continue_bb builder = function
       | SA.SExpr e -> ignore (expr builder e); builder
-      | SA.SReturn e -> ignore (match fdecl.SA.styp with
+      | SA.SReturn e -> copy_out_params builder;
+          ignore (match fdecl.SA.styp with
 	  A.Void -> L.build_ret_void builder
 	| _ -> L.build_ret (expr builder e) builder); builder
       | SA.SBreak -> ignore (L.build_br break_bb builder); builder
@@ -300,7 +317,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     stmts dummy_bb dummy_bb builder fdecl.SA.sbody
       (* Add a return if the last block falls off the end. Semantic checking
        * ensures that only functions that return void hit this path. *)
-      L.build_ret_void
+      (fun builder -> copy_out_params builder; L.build_ret_void builder)
 
   in
 

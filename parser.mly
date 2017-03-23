@@ -9,6 +9,7 @@ open Ast
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
 %token INT BOOL VOID STRUCT
+%token OUT INOUT
 %token <int> FLOAT
 %token <int> INT_LITERAL
 %token <float> FLOAT_LITERAL
@@ -66,8 +67,14 @@ formals_opt:
   | formal_list   { List.rev $1 }
 
 formal_list:
-    typ ID                   { [($1,$2)] }
-  | formal_list COMMA typ ID { ($3,$4) :: $1 }
+    formal_qualifier typ ID                   { [($1,($2,$3))] }
+  | formal_list COMMA formal_qualifier typ ID { ($3,($4,$5)) :: $1 }
+
+formal_qualifier:
+    /* nothing */ { In }
+  | OUT { Out }
+  | INOUT {Inout}
+  
 
 typ:
     INT { Vec(Int, 1) }
