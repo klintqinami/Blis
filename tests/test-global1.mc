@@ -1,12 +1,12 @@
 int a;
 int b;
 
-void printa()
+void print_a()
 {
   print(a);
 }
 
-void printb()
+void print_b()
 {
   print(b);
 }
@@ -21,10 +21,10 @@ int main()
 {
   a = 42;
   b = 21;
-  printa();
-  printb();
+  print_a();
+  print_b();
   incab();
-  printa();
-  printb();
+  print_a();
+  print_b();
   return 0;
 }
