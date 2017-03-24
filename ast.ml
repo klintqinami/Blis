@@ -11,6 +11,7 @@ type typ =
     Vec of base_type * int
   | Array of typ * int
   | Struct of string
+  | Buffer of typ
   | Window
   | Void
 
@@ -92,6 +93,7 @@ let rec string_of_typ = function
   | Vec(Int, w) -> "ivec" ^ string_of_int w
   | Vec(Float, w) -> "vec" ^ string_of_int w
   | Struct s -> s
+  | Buffer t -> "buffer" ^ "<" ^ string_of_typ t ^ ">"
   | Array(t, s) -> string_of_typ t ^ "[" ^ string_of_int s ^ "]"
   | Window -> "window"
   | Void -> "void"

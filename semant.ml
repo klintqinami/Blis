@@ -80,11 +80,17 @@ let check program =
     StringMap.add s.sname s m) StringMap.empty structs
   in
 
+  let check_buffer_type = function
+      Vec(Float, _) -> ()
+    | _ as t -> raise (Failure ("bad type " ^ string_of_typ t ^ " for buffer"))
+  in
+
   let check_return_type exceptf = function
       (Struct s) -> if not (StringMap.mem s struct_decls) then
           raise (Failure (exceptf s))
         else
           ()
+    | (Buffer t) -> check_buffer_type t
     | _ -> ()
   in
 
@@ -96,6 +102,7 @@ let check program =
         else
           ()
     | (Array(t, _), n) -> check_type bad_struct void (t, n)
+    | (Buffer(t), _) -> check_buffer_type t
     | (Void, n) -> raise (Failure (void n))
     | _ -> ()
   in
@@ -183,6 +190,8 @@ let check program =
      { typ = Void; fname = "printb"; formals = [In, (bool1, "x")];
        body = [] };
      { typ = Void; fname = "printf"; formals = [In, (float1, "x")];
+       body = [] };
+     { typ = Void; fname = "set_active_window"; formals = [In, (Window, "w")];
        body = [] };
     ]
   in
@@ -310,6 +319,20 @@ let check program =
         (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
 				      " = " ^ string_of_typ rt ^ " in " ^ 
 				      string_of_expr ex)), SAssign(lval, e))
+      | Call("upload_buffer", [buf; data]) as call ->
+          let buf = expr env buf and data = expr env data in
+          (match fst buf with
+              Buffer(t) ->
+                (match fst data with
+                    Array(t', _) -> if t' = t then
+                      (Void, SCall("upload_buffer", [buf; data]))
+                    else
+                      raise (Failure ("buffer and array type do not match " ^
+                        "in " ^ string_of_expr call))
+                  | _ -> raise (Failure ("must upload an array in " ^
+                    "upload_buffer in " ^ string_of_expr call)))
+            | _ -> raise (Failure ("first parameter to upload_buffer must be " ^
+                    "a buffer in " ^ string_of_expr call)))
       | Call(fname, actuals) as call -> let fd = function_decl fname in
           if List.length actuals != List.length fd.formals then
             raise (Failure ("expecting " ^ string_of_int
@@ -353,6 +376,7 @@ let check program =
             | Struct s -> expr env (Call(s, actuals))
             | Vec(b, w) -> handle_array_vec (Vec(b, 1)) w
             | Array(t, s) -> handle_array_vec t s
+            | Buffer(t) -> check_buffer_type t; check_cons []
             | Window -> check_cons [Vec(Int, 1); Vec(Int, 1)]
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));

@@ -49,6 +49,7 @@ rule token = parse
     FLOAT(width) }
 | "bool"   { BOOL }
 | "window" { WINDOW }
+| "buffer" { BUFFER }
 | "void"   { VOID }
 | "struct" { STRUCT }
 | "true"   { TRUE }

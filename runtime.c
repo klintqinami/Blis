@@ -74,7 +74,7 @@ GLuint create_buffer(void)
 }
 
 /* void *data and size are replaced by an array */
-void buffer_upload(GLuint buffer, const void *data, size_t size, int hint)
+void upload_buffer(GLuint buffer, const void *data, unsigned size, int hint)
 {
   /* the target doesn't really matter */
   glBindBuffer(GL_ARRAY_BUFFER, buffer);

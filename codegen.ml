@@ -37,6 +37,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
   and f32_t  = L.float_type context
   and f64_t  = L.double_type context
   and void_t = L.void_type context in
+  let voidp_t = L.pointer_type i8_t (* LLVM uses i8* instead of void* *) in
 
   let make_vec_t base =
     [| base; L.array_type base 2;
@@ -64,7 +65,8 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     | A.Vec(A.Bool, w) -> bvec_t.(w-1)
     | A.Struct s -> StringMap.find s struct_types
     | A.Array(t, s) -> L.array_type (ltype_of_typ t) s
-    | A.Window -> L.pointer_type i8_t
+    | A.Window -> voidp_t
+    | A.Buffer(_) -> i32_t
     | A.Void -> void_t in
 
   List.iter (fun s ->
@@ -81,15 +83,25 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     List.fold_left global_var StringMap.empty globals in
 
   (* Declare printf(), which the print built-in function will call *)
-  let printf_t = L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
+  let printf_t = L.var_arg_function_type i32_t [| voidp_t |] in
   let printf_func = L.declare_function "printf" printf_t the_module in
 
   (* Declare functions in the built-in library that call into GLFW and OpenGL *)
   let init_t = L.function_type void_t [| |] in
   let init_func = L.declare_function "init" init_t the_module in
-  let create_window_t = L.function_type (L.pointer_type i8_t) [| i32_t; i32_t |] in
+  let create_window_t = L.function_type voidp_t [| i32_t; i32_t |] in
   let create_window_func =
     L.declare_function "create_window" create_window_t the_module in
+  let set_active_window_t = L.function_type void_t [| voidp_t |] in
+  let set_active_window_func =
+    L.declare_function "set_active_window" set_active_window_t the_module in
+  let create_buffer_t = L.function_type i32_t [| |] in
+  let create_buffer_func = L.declare_function "create_buffer" create_buffer_t
+    the_module in
+  let upload_buffer_t =
+      L.function_type void_t [| i32_t; voidp_t; i32_t; i32_t |] in
+  let upload_buffer_func =
+      L.declare_function "upload_buffer" upload_buffer_t the_module in
 
   (* Define each function (arguments and return type) so we can call it *)
   let function_decls =
@@ -135,6 +147,12 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     (* Return the value for a variable or formal argument *)
     let lookup n = try StringMap.find n local_vars
                    with Not_found -> StringMap.find n global_vars
+    in
+
+    (* get an LLVM value representing the size of an array in bytes *)
+    let array_size = function
+        A.Array(A.Vec(A.Float, s), n) -> L.const_int i32_t (4 * s * n)
+      | _ -> raise Not_found (* TODO handle other cases *)
     in
 
 
@@ -224,6 +242,14 @@ let translate ((structs, globals, functions) : SA.sprogram) =
             [| float_format_str ;
                L.build_fpext (expr builder e) f64_t "tmp" builder |]
 	    "printf" builder
+      | SA.SCall ("set_active_window", [w]) ->
+          L.build_call set_active_window_func [| expr builder w |] "" builder
+      | SA.SCall ("upload_buffer", [buf; data]) ->
+          let buf' = expr builder buf in
+          let data' = L.build_bitcast (lvalue builder data) voidp_t "" builder in
+          let size = array_size (fst data) in
+          L.build_call upload_buffer_func
+            [| buf'; data'; size; L.const_int i32_t 0x88E4 (* GL_STATIC_DRAW *) |] "" builder
       | SA.SCall (f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in
 	 let actuals = List.rev (List.map2 (fun (q, (_, _)) e ->
@@ -239,6 +265,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
                   let e' = expr builder e in
                   (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
               ((L.undef (ltype_of_typ (fst sexpr))), 0) act)
+            | A.Buffer(_) -> L.build_call create_buffer_func [| |] "" builder
             | A.Window ->
                 (match act with
                     [w; h] -> L.build_call create_window_func

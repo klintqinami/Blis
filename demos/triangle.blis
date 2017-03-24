@@ -2,6 +2,15 @@ int main()
 {
   window win = window(1024, 768);
 
+  set_active_window(win);
+
+  buffer<vec3> b = buffer<vec3>();
+
+  upload_buffer(b,
+    vec3[3](vec3(-1., -1., 0.),
+            vec3(1.,  -1., 0.),
+            vec3(0.,  1.,  0.)));
+
   while (true) {}
 
   return 0;
