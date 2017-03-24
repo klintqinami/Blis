@@ -8,15 +8,9 @@
 #include <GLFW/glfw3.h> /* window creation and input handling crap */
 #include <stdbool.h> /* for true */
 
-/* ------ Blis builtin functions ------ */
-
 struct pipeline {
   GLuint vertex_array;
   GLuint program;
-};
-
-struct buffer {
-  GLuint buffer;
 };
 
 GLuint compile_shader(const char *source, GLenum stage)
@@ -72,25 +66,26 @@ struct pipeline create_pipeline(const char *vshader_source, const char *fshader_
   return p;
 }
 
-struct buffer create_buffer()
+GLuint create_buffer(void)
 {
-  struct buffer b;
-  glGenBuffers(1, &b.buffer);
+  GLuint b;
+  glGenBuffers(1, &b);
   return b;
 }
 
 /* void *data and size are replaced by an array */
-void buffer_upload(struct buffer *b, const void *data, size_t size, int hint)
+void buffer_upload(GLuint buffer, const void *data, size_t size, int hint)
 {
   /* the target doesn't really matter */
-  glBindBuffer(GL_ARRAY_BUFFER, b->buffer);
+  glBindBuffer(GL_ARRAY_BUFFER, buffer);
   glBufferData(GL_ARRAY_BUFFER, size, data, hint);
 }
 
 /* location corresponds to an input in the vertex shader */
-void pipeline_bind_vertex_buffer(struct pipeline *p, struct buffer *b, int location)
+void pipeline_bind_vertex_buffer(struct pipeline *p, GLuint b, int location)
 {
   glBindVertexArray(p->vertex_array);
+  glBindBuffer(GL_ARRAY_BUFFER, b);
   glVertexAttribPointer(location,
                         3, GL_FLOAT, false, /* vec3, unnormalized - comes from type of buffer */
                         0, /* stride */
@@ -105,27 +100,11 @@ void bind_pipeline(struct pipeline *p)
   glBindVertexArray(p->vertex_array);
 }
 
-/* ------ Shaders (each generated from a @vertex or @fragment decorated entrypoint) ------ */
-
-const char *vshader = "#version 330 core\n\
-layout(location = 0) in vec3 in_pos; // location corresponds to location in pipeline_bind_vertex_buffer() \n\
-\n\
-void main() {\n\
-  gl_Position = vec4(in_pos, 1.0); /* special output variable */\n\
-}";
-
-const char *fshader = "#version 330 core\n\
-out vec3 color;\n\
-\n\
-void main() {\n\
-  color = vec3(1.0, 0.0, 0.0);\n\
-}";
-
-int main()
+void init(void)
 {
   if (!glfwInit()) {
     fprintf(stderr, "failed to initialize glfw\n");
-    return 1;
+    exit(1);
   }
 
   /* OpenGL 3.3, core profile */
@@ -134,49 +113,50 @@ int main()
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); /* To make MacOS happy; should not be needed */
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); /* We don't want the old OpenGL */
 
-  GLFWwindow *window;
-  window = glfwCreateWindow(1024, 768, "Blis", NULL, NULL);
+}
+
+/* TODO: when we get string support, add a string for the name */
+GLFWwindow *create_window(int width, int height)
+{
+  GLFWwindow *window = glfwCreateWindow(width, height, "Blis", NULL, NULL);
   if (!window) {
     fprintf(stderr, "failed to create window\n");
-    return 1;
+    exit(1);
   }
 
+  return window;
+}
+
+void set_active_window(GLFWwindow *window)
+{
   glfwMakeContextCurrent(window);
 
 #ifndef __APPLE__
   glewExperimental = true;
   if (glewInit() != GLEW_OK) {
     fprintf(stderr, "Failed to initialize GLEW\n");
-    return 1;
+    exit(1);
   }
 #endif 
+}
 
+void draw_arrays(int num_indices)
+{
+    glDrawArrays(GL_TRIANGLES, 0, num_indices); /* Go! */
+}
 
-  /* my_pipeline p = my_pipeline() */
-  struct pipeline p = create_pipeline(vshader, fshader);
+void swap_buffers(GLFWwindow *window)
+{
+  glfwSwapBuffers(window);
+}
 
-  /* buffer<vec3> b = buffer<vec3>() */
-  struct buffer b = create_buffer();
+void poll_events(void)
+{
+  glfwPollEvents();
+}
 
-  /* vec3[] data = [vec3(...), vec3(...), vec3(...)] */
-  const float data[] = {
-    -1.0f, -1.0f, 0.0f,
-    1.0f, -1.0f, 0.0f,
-    0.0f, 1.0f, 0.0f
-  };
-
-  /* upload(b, data, STATIC_DRAW) */
-  buffer_upload(&b, data, sizeof(data), GL_STATIC_DRAW);
-
-  /* p.in_pos = b */
-  pipeline_bind_vertex_buffer(&p, &b, 0);
-
-  do {
-    bind_pipeline(&p); /* use our pipeline for drawin' some triangles */
-    glDrawArrays(GL_TRIANGLES, 0, 3); /* Go! */
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-  } while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS &&
-           glfwWindowShouldClose(window) == 0);
+bool should_close(GLFWwindow *window)
+{
+  glfwWindowShouldClose(window);
 }
 

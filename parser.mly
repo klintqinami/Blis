@@ -12,7 +12,7 @@ open Ast
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token INT BOOL VOID STRUCT
+%token INT BOOL VOID STRUCT WINDOW
 %token OUT INOUT
 %token <int> FLOAT
 %token <int> INT_LITERAL
@@ -88,6 +88,7 @@ no_array_typ:
   | FLOAT { Vec(Float, $1) }
   | BOOL { Vec(Bool, 1) }
   | STRUCT ID { Struct($2) }
+  | WINDOW { Window }
   | VOID { Void }
 
 typ:

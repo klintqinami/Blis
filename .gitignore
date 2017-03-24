@@ -2,3 +2,4 @@ _build/
 microc.native
 microc
 testall.log
+*.o

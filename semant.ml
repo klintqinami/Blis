@@ -171,21 +171,27 @@ let check program =
 
   (**** Checking Functions ****)
 
-  if List.mem "print" (List.map (fun fd -> fd.fname) functions)
-  then raise (Failure ("function print may not be defined")) else ();
-
   report_duplicate (fun n -> "duplicate function " ^ n)
     (List.map (fun fd -> fd.fname) functions);
 
   (* Function declaration for a named function *)
-  let built_in_decls =  [
-     { typ = Void; fname = "print"; formals = [In, (Vec(Int, 1), "x")];
+
+  let built_in_decls =
+    let int1 = Vec(Int, 1) and bool1 = Vec(Bool, 1) and float1 = Vec(Float, 1) in [
+     { typ = Void; fname = "print"; formals = [In, (int1, "x")];
        body = [] };
-     { typ = Void; fname = "printb"; formals = [In, (Vec(Bool, 1), "x")];
+     { typ = Void; fname = "printb"; formals = [In, (bool1, "x")];
        body = [] };
-     { typ = Void; fname = "printf"; formals = [In, (Vec(Float, 1), "x")];
-       body = [] }]
-   in
+     { typ = Void; fname = "printf"; formals = [In, (float1, "x")];
+       body = [] };
+    ]
+  in
+
+  List.iter (fun built_in_decl ->
+    let name = built_in_decl.fname in
+    if List.mem name (List.map (fun fd -> fd.fname) functions)
+    then raise (Failure ("function " ^ name ^ " may not be defined")) else ())
+  built_in_decls;
      
   let function_decls = List.fold_left (fun m fd -> StringMap.add fd.fname fd m)
                          StringMap.empty (built_in_decls @ functions)
@@ -322,17 +328,22 @@ let check program =
                 se)
               fd.formals actuals))
       | TypeCons(typ, actuals) ->
-          let handle_array_vec base_type size =
-            if List.length actuals != size then
-              raise (Failure ("expecting " ^ string_of_int size ^
+          let check_cons formals =
+            if List.length actuals != List.length formals then
+              raise (Failure ("expecting " ^ string_of_int (List.length formals) ^
                " arguments in constructor for " ^ string_of_typ typ))
-            else (typ, STypeCons(List.map (fun e ->
+            else (typ, STypeCons(List.map2 (fun e ft ->
               let se = expr env e in
               let atyp = fst se in
-              ignore (check_assign base_type atyp
-                (Failure ("expecting type " ^ string_of_typ base_type ^
+              ignore (check_assign ft atyp
+                (Failure ("expecting type " ^ string_of_typ ft ^
                   " in constructor for " ^ string_of_typ typ)));
-              se) actuals))
+              se) actuals formals))
+          in
+          let handle_array_vec base_type size =
+            let rec copies n =
+              if n = 0 then [] else base_type :: copies (n-1) in
+            check_cons (copies size)
           in
           match typ with
               (* struct constructors and functions are in the same namespace,
@@ -342,6 +353,7 @@ let check program =
             | Struct s -> expr env (Call(s, actuals))
             | Vec(b, w) -> handle_array_vec (Vec(b, 1)) w
             | Array(t, s) -> handle_array_vec t s
+            | Window -> check_cons [Vec(Int, 1); Vec(Int, 1)]
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));
                   

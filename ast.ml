@@ -7,7 +7,12 @@ type uop = Neg | Not
 
 type base_type = Float | Int | Bool
 
-type typ = Vec of base_type * int | Array of typ * int | Struct of string | Void
+type typ =
+    Vec of base_type * int
+  | Array of typ * int
+  | Struct of string
+  | Window
+  | Void
 
 type bind = typ * string
 
@@ -88,6 +93,7 @@ let rec string_of_typ = function
   | Vec(Float, w) -> "vec" ^ string_of_int w
   | Struct s -> s
   | Array(t, s) -> string_of_typ t ^ "[" ^ string_of_int s ^ "]"
+  | Window -> "window"
   | Void -> "void"
 
 let rec string_of_expr = function

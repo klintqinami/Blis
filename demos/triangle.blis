@@ -1,0 +1,8 @@
+int main()
+{
+  window win = window(1024, 768);
+
+  while (true) {}
+
+  return 0;
+}

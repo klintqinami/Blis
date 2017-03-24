@@ -64,6 +64,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     | A.Vec(A.Bool, w) -> bvec_t.(w-1)
     | A.Struct s -> StringMap.find s struct_types
     | A.Array(t, s) -> L.array_type (ltype_of_typ t) s
+    | A.Window -> L.pointer_type i8_t
     | A.Void -> void_t in
 
   List.iter (fun s ->
@@ -82,6 +83,13 @@ let translate ((structs, globals, functions) : SA.sprogram) =
   (* Declare printf(), which the print built-in function will call *)
   let printf_t = L.var_arg_function_type i32_t [| L.pointer_type i8_t |] in
   let printf_func = L.declare_function "printf" printf_t the_module in
+
+  (* Declare functions in the built-in library that call into GLFW and OpenGL *)
+  let init_t = L.function_type void_t [| |] in
+  let init_func = L.declare_function "init" init_t the_module in
+  let create_window_t = L.function_type (L.pointer_type i8_t) [| i32_t; i32_t |] in
+  let create_window_func =
+    L.declare_function "create_window" create_window_t the_module in
 
   (* Define each function (arguments and return type) so we can call it *)
   let function_decls =
@@ -231,6 +239,11 @@ let translate ((structs, globals, functions) : SA.sprogram) =
                   let e' = expr builder e in
                   (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
               ((L.undef (ltype_of_typ (fst sexpr))), 0) act)
+            | A.Window ->
+                (match act with
+                    [w; h] -> L.build_call create_window_func
+                      [| (expr builder w); (expr builder h) |] "" builder
+                  | _ -> raise (Failure "shouldn't get here"))
             | _ -> raise (Failure "shouldn't get here")
 
     in
@@ -316,6 +329,12 @@ let translate ((structs, globals, functions) : SA.sprogram) =
 
 
     in
+
+    if fdecl.SA.sfname = "main" then
+      ignore (L.build_call init_func [| |] "" builder)
+    else
+      ()
+    ;
 
     (* Build the code for each statement in the function *)
     let dummy_bb = L.append_block context "dummy" the_function in
