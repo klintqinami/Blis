@@ -12,6 +12,7 @@ type typ =
   | Array of typ * int
   | Struct of string
   | Buffer of typ
+  | Pipeline of string
   | Window
   | Void
 
@@ -59,8 +60,14 @@ type struct_decl = {
   members : bind list;
 }
 
+type pipeline_decl = {
+  pname : string;
+  inputs : bind list;
+}
+
 type program = {
   struct_decls : struct_decl list;
+  pipeline_decls : pipeline_decl list;
   var_decls : bind list;
   func_decls : func_decl list;
 }
@@ -92,7 +99,8 @@ let rec string_of_typ = function
   | Vec(Bool, w) -> "bvec" ^ string_of_int w
   | Vec(Int, w) -> "ivec" ^ string_of_int w
   | Vec(Float, w) -> "vec" ^ string_of_int w
-  | Struct s -> s
+  | Struct s -> "struct " ^ s
+  | Pipeline p -> "pipeline " ^ p
   | Buffer t -> "buffer" ^ "<" ^ string_of_typ t ^ ">"
   | Array(t, s) -> string_of_typ t ^ "[" ^ string_of_int s ^ "]"
   | Window -> "window"
@@ -153,7 +161,13 @@ let string_of_sdecl sdecl =
   "struct " ^ sdecl.sname ^ " {\n" ^
   String.concat "" (List.map string_of_vdecl sdecl.members) ^ "};\n"
 
+let string_of_pdecl pdecl =
+  "pipeline " ^ pdecl.pname ^ " {\n" ^
+  String.concat "" (List.map (fun b -> "in " ^ string_of_vdecl b) pdecl.inputs) ^
+  "};\n"
+
 let string_of_program prog =
   String.concat "" (List.map string_of_sdecl prog.struct_decls) ^ "\n" ^
+  String.concat "" (List.map string_of_pdecl prog.pipeline_decls) ^ "\n" ^
   String.concat "" (List.map string_of_vdecl prog.var_decls) ^ "\n" ^
   String.concat "\n" (List.map string_of_fdecl prog.func_decls)

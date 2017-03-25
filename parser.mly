@@ -12,8 +12,8 @@ open Ast
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token INT BOOL VOID STRUCT BUFFER WINDOW
-%token OUT INOUT
+%token INT BOOL VOID STRUCT PIPELINE BUFFER WINDOW
+%token IN OUT INOUT
 %token <int> FLOAT
 %token <int> INT_LITERAL
 %token <float> FLOAT_LITERAL
@@ -41,10 +41,11 @@ program:
   decls EOF { $1 }
 
 decls:
-  /* nothing */ { { struct_decls = []; var_decls = []; func_decls = []; } }
+  /* nothing */ { { struct_decls = []; pipeline_decls = []; var_decls = []; func_decls = []; } }
  | decls vdecl { { $1 with var_decls = $2 :: $1.var_decls; } }
  | decls fdecl { { $1 with func_decls = $2 :: $1.func_decls; } }
  | decls sdecl { { $1 with struct_decls = $2 :: $1.struct_decls; } }
+ | decls pdecl { { $1 with pipeline_decls = $2 :: $1.pipeline_decls; } }
 
 fdecl:
    typ ID LPAREN formals_opt RPAREN LBRACE stmt_list RBRACE
@@ -65,6 +66,16 @@ sdecl:
       sname = $2;
       members = List.rev $4;
     } }
+
+pdecl:
+    PIPELINE ID LBRACE pdecl_list RBRACE SEMI { {
+      pname = $2;
+      inputs = List.rev $4.inputs
+    } }
+
+pdecl_list:
+    /* nothing */ { { pname = ""; inputs = [] } }
+  | pdecl_list IN bind SEMI  { { $1 with inputs = $3 :: $1.inputs } }
 
 formals_opt:
     /* nothing */ { [] }
@@ -88,6 +99,7 @@ no_array_typ:
   | FLOAT { Vec(Float, $1) }
   | BOOL { Vec(Bool, 1) }
   | STRUCT ID { Struct($2) }
+  | PIPELINE ID { Pipeline($2) }
   | BUFFER LT typ GT { Buffer($3) }
   | WINDOW { Window }
   | VOID { Void }

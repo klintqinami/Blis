@@ -1,3 +1,7 @@
+pipeline my_pipeline {
+  in buffer<vec3> in_pos;
+};
+
 int main()
 {
   window win = window(1024, 768);
@@ -11,7 +15,17 @@ int main()
             vec3(1.,  -1., 0.),
             vec3(0.,  1.,  0.)));
 
-  while (true) {}
+  pipeline my_pipeline p = pipeline my_pipeline();
+  p.in_pos = b;
+
+  while (true) {
+    bind_pipeline(p);
+    draw_arrays(3);
+    swap_buffers(win);
+    poll_events();
+    if (window_should_close(win))
+      break;
+  }
 
   return 0;
 }

@@ -28,7 +28,24 @@ let index_of e l =
   in
 index_of' 0 l
 
-let translate ((structs, globals, functions) : SA.sprogram) =
+(* hardcode the vertex and fragment shaders for now... *)
+
+let vshader = "#version 330 core\n\
+layout(location = 0) in vec3 in_pos;\n\
+\n\
+void main() {\n\
+  gl_Position = vec4(in_pos, 1.0);\n\
+}"
+
+let fshader = "#version 330 core\n\
+out vec3 color;\n\
+\n\
+void main() {\n\
+  color = vec3(1.0, 0.0, 0.0);\n\
+}"
+
+
+let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
   let context = L.global_context () in
   let the_module = L.create_module context "MicroC"
   and i32_t  = L.i32_type  context
@@ -37,6 +54,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
   and f32_t  = L.float_type context
   and f64_t  = L.double_type context
   and void_t = L.void_type context in
+  let string_t = L.pointer_type i8_t in
   let voidp_t = L.pointer_type i8_t (* LLVM uses i8* instead of void* *) in
 
   let make_vec_t base =
@@ -50,9 +68,22 @@ let translate ((structs, globals, functions) : SA.sprogram) =
   let ivec_t = make_vec_t i32_t in
   let bvec_t = make_vec_t i1_t in
 
+  (* define base pipeline type that every pipeline derives from
+   * this is struct pipeline in runtime.c *)
+  let pipeline_t = L.struct_type context [|
+    (* vertex_array *)
+    i32_t;
+    (* program *)
+    i32_t
+  |] in
+
   (* construct struct types *)
   let struct_decls = List.fold_left (fun m s ->
     StringMap.add s.A.sname s m) StringMap.empty structs
+  in
+
+  let pipeline_decls = List.fold_left (fun m p ->
+    StringMap.add p.A.pname p m) StringMap.empty pipelines
   in
 
   let struct_types = List.fold_left (fun m s ->
@@ -66,6 +97,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
     | A.Struct s -> StringMap.find s struct_types
     | A.Array(t, s) -> L.array_type (ltype_of_typ t) s
     | A.Window -> voidp_t
+    | A.Pipeline(_) -> pipeline_t
     | A.Buffer(_) -> i32_t
     | A.Void -> void_t in
 
@@ -81,6 +113,11 @@ let translate ((structs, globals, functions) : SA.sprogram) =
       let init = L.undef (ltype_of_typ t)
       in StringMap.add n (L.define_global n init the_module) m in
     List.fold_left global_var StringMap.empty globals in
+
+  let vshader_global =
+    L.define_global "vshader" (L.const_stringz context vshader) the_module in
+  let fshader_global =
+    L.define_global "fshader" (L.const_stringz context fshader) the_module in
 
   (* Declare printf(), which the print built-in function will call *)
   let printf_t = L.var_arg_function_type i32_t [| voidp_t |] in
@@ -99,9 +136,38 @@ let translate ((structs, globals, functions) : SA.sprogram) =
   let create_buffer_func = L.declare_function "create_buffer" create_buffer_t
     the_module in
   let upload_buffer_t =
-      L.function_type void_t [| i32_t; voidp_t; i32_t; i32_t |] in
+    L.function_type void_t [| i32_t; voidp_t; i32_t; i32_t |] in
   let upload_buffer_func =
-      L.declare_function "upload_buffer" upload_buffer_t the_module in
+    L.declare_function "upload_buffer" upload_buffer_t the_module in
+  let create_pipeline_t =
+    L.function_type void_t [| L.pointer_type pipeline_t; string_t; string_t |] in
+  let create_pipeline_func =
+    L.declare_function "create_pipeline" create_pipeline_t the_module in
+  let pipeline_bind_vertex_buffer_t = L.function_type void_t [|
+    L.pointer_type pipeline_t; i32_t; i32_t; i32_t |] in
+  let pipeline_bind_vertex_buffer_func = 
+    L.declare_function "pipeline_bind_vertex_buffer"
+      pipeline_bind_vertex_buffer_t the_module in
+  let pipeline_get_vertex_buffer_t = L.function_type i32_t [|
+    L.pointer_type pipeline_t; i32_t |] in
+  let pipeline_get_vertex_buffer_func =
+    L.declare_function "pipeline_get_vertex_buffer"
+      pipeline_get_vertex_buffer_t the_module in
+  let bind_pipeline_t = L.function_type void_t [| L.pointer_type pipeline_t |] in
+  let bind_pipeline_func =
+    L.declare_function "bind_pipeline" bind_pipeline_t the_module in
+  let draw_arrays_t = L.function_type void_t [| i32_t |] in
+  let draw_arrays_func =
+    L.declare_function "draw_arrays" draw_arrays_t the_module in
+  let swap_buffers_t = L.function_type void_t [| voidp_t |] in
+  let swap_buffers_func =
+    L.declare_function "glfwSwapBuffers" swap_buffers_t the_module in
+  let poll_events_t = L.function_type void_t [| |] in
+  let poll_events_func =
+    L.declare_function "glfwPollEvents" poll_events_t the_module in
+  let should_close_t = L.function_type i32_t [| voidp_t |] in
+  let should_close_func =
+    L.declare_function "glfwWindowShouldClose" should_close_t the_module in
 
   (* Define each function (arguments and return type) so we can call it *)
   let function_decls =
@@ -188,12 +254,32 @@ let translate ((structs, globals, functions) : SA.sprogram) =
             L.build_alloca (ltype_of_typ (fst sexpr)) "expr_tmp" builder in
           ignore (L.build_store e' temp builder); temp
 
+    and handle_assign builder l r =
+      match l with
+          (A.Buffer(A.Vec(A.Float, comp)), SA.SStructDeref((A.Pipeline(p), _) as e, m)) ->
+            let pdecl = StringMap.find p pipeline_decls in
+            let location = index_of m (List.map snd pdecl.A.inputs) in
+            let lval' = lvalue builder e in
+            let e' = expr builder r in
+            ignore (L.build_call pipeline_bind_vertex_buffer_func [|
+              lval'; e'; L.const_int i32_t comp; L.const_int i32_t location |]
+              "" builder); e'
+        | _ -> let lval' = lvalue builder l in
+            let e' = expr builder r in
+            ignore (L.build_store e' lval' builder); e'
+
     (* Construct code for an expression; return its value *)
     and expr builder sexpr = match snd sexpr with
 	SA.SIntLit i -> L.const_int i32_t i
       | SA.SFloatLit f -> L.const_float f32_t f
       | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
       | SA.SNoexpr -> L.const_int i32_t 0
+      | SA.SStructDeref((A.Pipeline(p), _) as e, m) ->
+          let pdecl = StringMap.find p pipeline_decls in
+          let location = index_of m (List.map snd pdecl.A.inputs) in
+          let e' = lvalue builder e in
+          L.build_call pipeline_get_vertex_buffer_func [|
+            e'; L.const_int i32_t location |] "" builder
       | SA.SId _ | SA.SStructDeref (_, _) | SA.SArrayDeref (_, _) ->
           L.build_load (lvalue builder sexpr) "load_tmp" builder
       | SA.SBinop (e1, op, e2) ->
@@ -231,9 +317,7 @@ let translate ((structs, globals, functions) : SA.sprogram) =
 	    SA.INeg     -> L.build_neg
 	  | SA.FNeg     -> L.build_fneg
           | SA.BNot     -> L.build_not) e' "tmp" builder
-      | SA.SAssign (lval, e) -> let lval' = lvalue builder lval in
-                                let e' = expr builder e in
-                           	ignore (L.build_store e' lval' builder); e'
+      | SA.SAssign (lval, e) -> handle_assign builder lval e
       | SA.SCall ("print", [e]) | SA.SCall ("printb", [e]) ->
 	  L.build_call printf_func [| int_format_str ; (expr builder e) |]
 	    "printf" builder
@@ -250,6 +334,22 @@ let translate ((structs, globals, functions) : SA.sprogram) =
           let size = array_size (fst data) in
           L.build_call upload_buffer_func
             [| buf'; data'; size; L.const_int i32_t 0x88E4 (* GL_STATIC_DRAW *) |] "" builder
+      | SA.SCall ("bind_pipeline", [p]) ->
+          let p' = lvalue builder p in
+          L.build_call bind_pipeline_func [| p' |] "" builder
+      | SA.SCall ("draw_arrays", [i]) ->
+          let i' = expr builder i in
+          L.build_call draw_arrays_func [| i' |] "" builder
+      | SA.SCall ("swap_buffers", [w]) ->
+          let w' = expr builder w in
+          L.build_call swap_buffers_func [| w' |] "" builder
+      | SA.SCall ("poll_events", []) ->
+          L.build_call poll_events_func [| |] "" builder
+      | SA.SCall ("window_should_close", [w]) ->
+          let w' = expr builder w in
+          L.build_icmp L.Icmp.Ne
+            (L.build_call should_close_func [| w' |]  "" builder)
+            (L.const_int i32_t 0) "" builder
       | SA.SCall (f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in
 	 let actuals = List.rev (List.map2 (fun (q, (_, _)) e ->
@@ -266,6 +366,15 @@ let translate ((structs, globals, functions) : SA.sprogram) =
                   (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
               ((L.undef (ltype_of_typ (fst sexpr))), 0) act)
             | A.Buffer(_) -> L.build_call create_buffer_func [| |] "" builder
+            | A.Pipeline(_) ->
+                let tmp = L.build_alloca pipeline_t "pipeline_tmp" builder in
+                let v = L.build_gep vshader_global [|
+                  L.const_int i32_t 0; L.const_int i32_t 0 |] "" builder in
+                let f = L.build_gep fshader_global [|
+                  L.const_int i32_t 0; L.const_int i32_t 0 |] "" builder in
+                ignore
+                  (L.build_call create_pipeline_func [| tmp; v; f |] "" builder);
+                L.build_load tmp "" builder
             | A.Window ->
                 (match act with
                     [w; h] -> L.build_call create_window_func

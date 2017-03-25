@@ -50,10 +50,12 @@ rule token = parse
 | "bool"   { BOOL }
 | "window" { WINDOW }
 | "buffer" { BUFFER }
+| "pipeline" { PIPELINE }
 | "void"   { VOID }
 | "struct" { STRUCT }
 | "true"   { TRUE }
 | "false"  { FALSE }
+| "in"  { IN }
 | "out" { OUT }
 | "inout" { INOUT }
 | digits as lxm { INT_LITERAL(int_of_string lxm) }

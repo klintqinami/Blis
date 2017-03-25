@@ -34,36 +34,33 @@ GLuint compile_shader(const char *source, GLenum stage)
   return shader;
 }
 
-struct pipeline create_pipeline(const char *vshader_source, const char *fshader_source)
+void create_pipeline(struct pipeline *p,
+                     const char *vshader_source, const char *fshader_source)
 {
-  struct pipeline p;
-
   // compile shaders
   GLuint vshader = compile_shader(vshader_source, GL_VERTEX_SHADER);
   GLuint fshader = compile_shader(fshader_source, GL_FRAGMENT_SHADER);
 
   // link shaders
-  p.program = glCreateProgram();
-  glAttachShader(p.program, vshader);
-  glAttachShader(p.program, fshader);
-  glLinkProgram(p.program);
+  p->program = glCreateProgram();
+  glAttachShader(p->program, vshader);
+  glAttachShader(p->program, fshader);
+  glLinkProgram(p->program);
 
   GLint result;
-  glGetProgramiv(p.program, GL_LINK_STATUS, &result);
+  glGetProgramiv(p->program, GL_LINK_STATUS, &result);
   if (!result) {
     GLint log_length;
-    glGetProgramiv(p.program, GL_INFO_LOG_LENGTH, &log_length);
+    glGetProgramiv(p->program, GL_INFO_LOG_LENGTH, &log_length);
     char *error = malloc(log_length + 1);
-    glGetProgramInfoLog(p.program, log_length, NULL, error);
+    glGetProgramInfoLog(p->program, log_length, NULL, error);
     printf("error linking vertex shader:\n\n%s\n\n-------\nand fragment shader:\n\n%s\n\n------\n\n%s\n",
             vshader_source, fshader_source, error);
     free(error);
     exit(1);
   }
 
-  glGenVertexArrays(1, &p.vertex_array);
-
-  return p;
+  glGenVertexArrays(1, &p->vertex_array);
 }
 
 GLuint create_buffer(void)
@@ -82,16 +79,24 @@ void upload_buffer(GLuint buffer, const void *data, unsigned size, int hint)
 }
 
 /* location corresponds to an input in the vertex shader */
-void pipeline_bind_vertex_buffer(struct pipeline *p, GLuint b, int location)
+void pipeline_bind_vertex_buffer(struct pipeline *p, GLuint b, int components, int location)
 {
   glBindVertexArray(p->vertex_array);
   glBindBuffer(GL_ARRAY_BUFFER, b);
   glVertexAttribPointer(location,
-                        3, GL_FLOAT, false, /* vec3, unnormalized - comes from type of buffer */
+                        components, GL_FLOAT, false, /* vecN - comes from type of buffer */
                         0, /* stride */
                         (void *) 0 /* array buffer offset */
                        );
   glEnableVertexAttribArray(location);
+}
+
+GLuint pipeline_get_vertex_buffer(struct pipeline *p, int location)
+{
+  GLuint out;
+  glBindVertexArray(p->vertex_array);
+  glGetVertexAttribIuiv(location, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &out);
+  return out;
 }
 
 void bind_pipeline(struct pipeline *p)

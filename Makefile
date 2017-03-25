@@ -9,7 +9,7 @@ all: microc.native runtime.o
 
 
 runtime.o: runtime.c
-	cc -c -o runtime.o runtime.c
+	cc -c -g -o runtime.o runtime.c
 
 .PHONY : microc.native
 microc.native :

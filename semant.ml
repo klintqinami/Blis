@@ -24,6 +24,7 @@ let check program =
   let globals = program.var_decls in
   let functions = program.func_decls in
   let structs = program.struct_decls in
+  let pipelines = program.pipeline_decls in
 
   (* Raise an exception if the given list has a duplicate *)
   let report_duplicate exceptf list =
@@ -70,14 +71,22 @@ let check program =
      if lvaluet = rvaluet then lvaluet else raise err
   in
 
-  (**** Checking Structure Declarations ****)
+  (**** Checking Structure and Pipeline Declarations ****)
 
   report_duplicate
     (fun n -> "duplicate structure " ^ n)
     (List.map (fun s -> s.sname) structs);
 
+  report_duplicate
+    (fun n -> "duplicate pipeline " ^ n)
+    (List.map (fun p -> p.pname) pipelines);
+
   let struct_decls = List.fold_left (fun m s ->
     StringMap.add s.sname s m) StringMap.empty structs
+  in
+
+  let pipeline_decls = List.fold_left (fun m p ->
+    StringMap.add p.pname p m) StringMap.empty pipelines
   in
 
   let check_buffer_type = function
@@ -87,7 +96,11 @@ let check program =
 
   let check_return_type exceptf = function
       (Struct s) -> if not (StringMap.mem s struct_decls) then
-          raise (Failure (exceptf s))
+          raise (Failure (exceptf ("struct " ^ s)))
+        else
+          ()
+    | (Pipeline p) -> if not (StringMap.mem p pipeline_decls) then
+          raise (Failure (exceptf ("pipeline " ^ p)))
         else
           ()
     | (Buffer t) -> check_buffer_type t
@@ -98,7 +111,11 @@ let check program =
    * doesn't exist *)
   let rec check_type bad_struct void = function
       (Struct s, n) -> if not (StringMap.mem s struct_decls) then
-          raise (Failure (bad_struct s n))
+          raise (Failure (bad_struct ("struct " ^ s) n))
+        else
+          ()
+    | (Pipeline p, n) -> if not (StringMap.mem p pipeline_decls) then
+          raise (Failure (bad_struct ("pipeline " ^ p) n))
         else
           ()
     | (Array(t, _), n) -> check_type bad_struct void (t, n)
@@ -114,12 +131,23 @@ let check program =
 
   List.iter (fun s ->
     List.iter (fun m -> check_type
-      (fun sn n -> "struct " ^ sn ^ " does not exist in member " ^ n ^ 
+      (fun sn n -> sn ^ " does not exist in member " ^ n ^ 
         " of struct " ^ s.sname)
       (fun n -> "illegal void member " ^ n ^ " of struct " ^ s.sname)
       m)
     s.members)
   structs;
+
+  List.iter (fun p ->
+    report_duplicate
+      (fun i -> "duplicate input " ^ i ^ " of pipeline " ^ p.pname)
+      (List.map snd p.inputs)) pipelines;
+
+  List.iter (fun p ->
+    List.iter (fun i -> match fst i with
+        Buffer(_) -> ()
+      | _ -> raise (Failure ("input " ^ snd i ^ " of pipeline "  ^ p.pname ^
+              "is not a buffer"))) p.inputs) pipelines;
 
   let _ =
     (* function from struct name to a list of struct names used in its members *)
@@ -161,7 +189,7 @@ let check program =
   (**** Checking Global Variables ****)
 
   List.iter (check_type
-    (fun s n -> "struct " ^ s ^ " does not exist for global " ^ n)
+    (fun s n -> s ^ " does not exist for global " ^ n)
     (fun n -> "illegal void global " ^ n)) globals;
 
   let env = {
@@ -215,13 +243,13 @@ let check program =
   let check_function func =
 
     List.iter (check_type
-      (fun s n -> "struct " ^ s ^ " does not exist for formal " ^ n ^ " in " ^
+      (fun s n -> s ^ " does not exist for formal " ^ n ^ " in " ^
         func.fname)
       (fun n -> "illegal void formal " ^ n ^ " in " ^ func.fname))
     (List.map snd func.formals);
 
     check_return_type
-      (fun s -> "struct " ^ s ^ " does not exist in return type of function " ^
+      (fun s -> s ^ " does not exist in return type of function " ^
       func.fname) func.typ;
 
     report_duplicate (fun n -> "duplicate formal " ^ n ^ " in " ^ func.fname)
@@ -239,6 +267,13 @@ let check program =
                 with Not_found ->
                   raise (Failure ("struct " ^ s ^ " does not contain member " ^
                     m ^ " in " ^ string_of_expr d)))
+            | Pipeline p ->
+                let ptype = StringMap.find p pipeline_decls in
+                (try
+                  fst (List.find (fun b -> snd b = m) ptype.inputs)
+                with Not_found ->
+                  raise (Failure ("pipeline " ^ p ^ " does not contain input " ^
+                  m ^ " in " ^ string_of_expr d)))
             | Vec(b, w) ->
                 (match m with
                     "x" | "y" when w >= 2 -> Vec(b, 1)
@@ -333,6 +368,30 @@ let check program =
                     "upload_buffer in " ^ string_of_expr call)))
             | _ -> raise (Failure ("first parameter to upload_buffer must be " ^
                     "a buffer in " ^ string_of_expr call)))
+      | Call("bind_pipeline", [p]) as call ->
+          let p' = expr env p in
+          (match fst p' with
+              Pipeline(_) ->
+                (Void, SCall("bind_pipeline", [p']))
+            | _ as t -> raise (Failure ("calling bind_pipeline with " ^
+              string_of_typ t ^ " instead of pipeline in " ^ 
+              string_of_expr call)))
+      | Call ("draw_arrays", [i]) ->
+          let i' = expr env i in
+          (match fst i' with
+              Vec(Int, 1) -> (Void, SCall("draw_arrays", [i']))
+            | _ -> raise (Failure "index for draw_arrays is not an integer"))
+      | Call ("swap_buffers", [w]) ->
+          let w' = expr env w in
+          (match fst w' with
+              Window -> (Void, SCall("swap_buffers", [w']))
+            | _ -> raise (Failure "argument for swap_buffers must be a window"))
+      | Call("poll_events", []) -> (Void, SCall("poll_events", [])) 
+      | Call("window_should_close", [w]) ->
+          let w' = expr env w in
+          (match fst w' with
+              Window -> (Vec(Bool, 1), SCall("window_should_close", [w']))
+            | _ -> raise (Failure "argument for window_should_close must be a window"))
       | Call(fname, actuals) as call -> let fd = function_decl fname in
           if List.length actuals != List.length fd.formals then
             raise (Failure ("expecting " ^ string_of_int
@@ -377,6 +436,7 @@ let check program =
             | Vec(b, w) -> handle_array_vec (Vec(b, 1)) w
             | Array(t, s) -> handle_array_vec t s
             | Buffer(t) -> check_buffer_type t; check_cons []
+            | Pipeline(_) -> check_cons []
             | Window -> check_cons [Vec(Int, 1); Vec(Int, 1)]
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));
@@ -435,7 +495,7 @@ let check program =
             | Expr e -> env, (SExpr(expr env e) :: sstmts)
             | Local ((t, s) as b, oe) ->
                 (check_type
-                  (fun s n -> "struct " ^ s ^ " does not exist for local " ^ n ^
+                  (fun s n -> s ^ " does not exist for local " ^ n ^
                     " in " ^ func.fname)
                   (fun n -> "illegal void local " ^ n ^
                                   " in " ^ func.fname) b);
@@ -475,4 +535,4 @@ let check program =
 
    
   in
-  (structs, globals, List.map check_function functions)
+  (structs, pipelines, globals, List.map check_function functions)
