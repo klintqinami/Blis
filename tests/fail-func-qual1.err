@@ -1,0 +1,1 @@
+Fatal error: exception Failure("cannot call @gpuonly function from @cpuonly function")

@@ -48,9 +48,17 @@ type formal_qualifier =
   | Out
   | Inout
 
+type func_qualifier =
+    GpuOnly
+  | Vertex (* subset of GPU-only *)
+  | Fragment (* subset of GPU-only *)
+  | CpuOnly
+  | Both
+
 type func_decl = {
     typ : typ;
     fname : string;
+    fqual : func_qualifier;
     formals : (formal_qualifier * bind) list;
     body : stmt list;
   }
@@ -144,15 +152,22 @@ let rec string_of_stmt = function
   | Break -> "break;"
   | Continue -> "continue;"
 
-let string_of_fqualifier = function
+let string_of_formal_qual = function
     In -> ""
   | Out -> "out"
   | Inout -> "inout" 
 
+let string_of_func_qual = function
+    CpuOnly -> "@cpuonly"
+  | GpuOnly -> "@gpuonly"
+  | Vertex -> "@vertex"
+  | Fragment -> "@fragment"
+  | Both -> "@gpu"
+
 let string_of_fdecl fdecl =
-  string_of_typ fdecl.typ ^ " " ^
+  string_of_func_qual fdecl.fqual ^ " " ^ string_of_typ fdecl.typ ^ " " ^
   fdecl.fname ^ "(" ^ String.concat ", " (List.map (fun (q, (t, n)) ->
-  string_of_fqualifier q ^ " " ^ string_of_typ t ^ " " ^ n) fdecl.formals) ^
+  string_of_formal_qual q ^ " " ^ string_of_typ t ^ " " ^ n) fdecl.formals) ^
   ")\n{\n" ^
   String.concat "" (List.map string_of_stmt fdecl.body) ^
   "}\n"

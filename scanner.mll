@@ -61,6 +61,10 @@ rule token = parse
 | digits as lxm { INT_LITERAL(int_of_string lxm) }
 | (digits exp | (digits '.' digits? | '.' digits) exp?) as lxm
   { FLOAT_LITERAL(float_of_string lxm) }
+| "@gpuonly"  { GPUONLY }
+| "@gpu"      { GPU }
+| "@vertex"   { VERTEX }
+| "@fragment" { FRAGMENT }
 | ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 | eof { EOF }
 | _ as char { raise (Failure("illegal character " ^ Char.escaped char)) }

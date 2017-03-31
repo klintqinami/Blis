@@ -13,6 +13,7 @@ open Ast
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
 %token INT BOOL VOID STRUCT PIPELINE BUFFER WINDOW
+%token GPUONLY GPU VERTEX FRAGMENT
 %token IN OUT INOUT
 %token <int> FLOAT
 %token <int> INT_LITERAL
@@ -48,11 +49,26 @@ decls:
  | decls pdecl { { $1 with pipeline_decls = $2 :: $1.pipeline_decls; } }
 
 fdecl:
-   typ ID LPAREN formals_opt RPAREN LBRACE stmt_list RBRACE
+  /* this definition has to be repeated to avoid a shift-reduce conflict... grr
+   */
+   func_qualifier typ ID LPAREN formals_opt RPAREN LBRACE stmt_list RBRACE
+     { { typ = $2;
+	 fname = $3;
+         fqual = $1;
+	 formals = $5;
+	 body = List.rev $8 } }
+ | typ ID LPAREN formals_opt RPAREN LBRACE stmt_list RBRACE
      { { typ = $1;
 	 fname = $2;
+         fqual = CpuOnly;
 	 formals = $4;
 	 body = List.rev $7 } }
+
+func_qualifier:
+    GPUONLY             { GpuOnly }
+  | VERTEX              { Vertex }
+  | FRAGMENT            { Fragment }
+  | GPU                 { Both }
 
 vdecl:
     bind SEMI { $1 }

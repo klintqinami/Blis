@@ -12,6 +12,7 @@ type translation_environment = {
   scope : symbol StringMap.t;
   names : StringSet.t;
   locals : bind list;
+  cur_qualifier : func_qualifier;
   in_loop : bool;
 }
 
@@ -173,8 +174,9 @@ let check program =
    
   (* Add struct constructors to function declarations *)
   let functions = List.fold_left (fun functions s -> 
-    {typ = Struct(s.sname); 
+    { typ = Struct(s.sname); 
       fname = s.sname; 
+      fqual = Both;
       formals = List.map (fun b -> (In, b)) s.members; 
       body = Local((Struct(s.sname), "tmp"), None) ::
         (List.map (fun m -> 
@@ -195,6 +197,7 @@ let check program =
   let env = {
     in_loop = false;
     scope = StringMap.empty;
+    cur_qualifier = Both;
     locals = [];
     names = StringSet.empty; } in
 
@@ -214,13 +217,13 @@ let check program =
   let built_in_decls =
     let int1 = Vec(Int, 1) and bool1 = Vec(Bool, 1) and float1 = Vec(Float, 1) in [
      { typ = Void; fname = "print"; formals = [In, (int1, "x")];
-       body = [] };
+       fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printb"; formals = [In, (bool1, "x")];
-       body = [] };
+       fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printf"; formals = [In, (float1, "x")];
-       body = [] };
+       fqual = CpuOnly; body = [] };
      { typ = Void; fname = "set_active_window"; formals = [In, (Window, "w")];
-       body = [] };
+       fqual = CpuOnly; body = [] };
     ]
   in
 
@@ -238,7 +241,12 @@ let check program =
        with Not_found -> raise (Failure ("unrecognized function " ^ s))
   in
 
-  let _ = function_decl "main" in (* Ensure "main" is defined *)
+  let main = function_decl "main" in (* Ensure "main" is defined *)
+  if main.fqual <> CpuOnly then
+    raise (Failure "main function has bad qualifier")
+  else
+    ()
+  ;
 
   let check_function func =
 
@@ -393,6 +401,20 @@ let check program =
               Window -> (Vec(Bool, 1), SCall("window_should_close", [w']))
             | _ -> raise (Failure "argument for window_should_close must be a window"))
       | Call(fname, actuals) as call -> let fd = function_decl fname in
+          (match env.cur_qualifier, fd.fqual with
+              (CpuOnly, CpuOnly)
+            | (CpuOnly, Both)
+            | (Vertex, GpuOnly)
+            | (Vertex, Both)
+            | (Fragment, GpuOnly)
+            | (Fragment, Both)
+            | (GpuOnly, GpuOnly)
+            | (GpuOnly, Both)
+            | (Both, Both) -> ()
+            |  _ -> raise (Failure ("cannot call " ^ string_of_func_qual fd.fqual ^
+                      " function from " ^ string_of_func_qual env.cur_qualifier ^
+                      " function")))
+          ;
           if List.length actuals != List.length fd.formals then
             raise (Failure ("expecting " ^ string_of_int
               (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
@@ -512,6 +534,8 @@ let check program =
                   | None -> env, sstmts)
       (env, sstmts) sl
     in
+
+    let env = { env with cur_qualifier = func.fqual } in
 
     let env = List.fold_left (fun env (_, (t, s)) ->
       fst (add_symbol_table env s t)) env func.formals
