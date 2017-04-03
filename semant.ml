@@ -224,6 +224,14 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "set_active_window"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
+     { typ = Void; fname = "draw_arrays"; formals = [In, (Vec(Int, 1), "n")];
+       fqual = CpuOnly; body = [] };
+     { typ = Void; fname = "swap_buffers"; formals = [In, (Window, "w")];
+       fqual = CpuOnly; body = [] };
+     { typ = Void; fname = "poll_events"; formals = [];
+       fqual = CpuOnly; body = [] };
+     { typ = Vec(Bool, 1); fname = "window_should_close";
+       formals = [In, (Window, "w")]; fqual = CpuOnly; body = [] };
     ]
   in
 
@@ -384,22 +392,6 @@ let check program =
             | _ as t -> raise (Failure ("calling bind_pipeline with " ^
               string_of_typ t ^ " instead of pipeline in " ^ 
               string_of_expr call)))
-      | Call ("draw_arrays", [i]) ->
-          let i' = expr env i in
-          (match fst i' with
-              Vec(Int, 1) -> (Void, SCall("draw_arrays", [i']))
-            | _ -> raise (Failure "index for draw_arrays is not an integer"))
-      | Call ("swap_buffers", [w]) ->
-          let w' = expr env w in
-          (match fst w' with
-              Window -> (Void, SCall("swap_buffers", [w']))
-            | _ -> raise (Failure "argument for swap_buffers must be a window"))
-      | Call("poll_events", []) -> (Void, SCall("poll_events", [])) 
-      | Call("window_should_close", [w]) ->
-          let w' = expr env w in
-          (match fst w' with
-              Window -> (Vec(Bool, 1), SCall("window_should_close", [w']))
-            | _ -> raise (Failure "argument for window_should_close must be a window"))
       | Call(fname, actuals) as call -> let fd = function_decl fname in
           (match env.cur_qualifier, fd.fqual with
               (CpuOnly, CpuOnly)
