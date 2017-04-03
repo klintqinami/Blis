@@ -1,0 +1,1 @@
+Fatal error: exception Failure("cannot call @cpuonly function bind_pipeline from @gpuonly function bar")

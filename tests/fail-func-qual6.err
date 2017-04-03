@@ -1,0 +1,1 @@
+Fatal error: exception Failure("cannot call @cpuonly function window_should_close from @gpuonly function foo")

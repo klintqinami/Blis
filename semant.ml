@@ -271,6 +271,23 @@ let check program =
     report_duplicate (fun n -> "duplicate formal " ^ n ^ " in " ^ func.fname)
       (List.map (fun (_, (_, n)) -> n) func.formals);
 
+    let check_call_qualifiers env fname fqual =
+      (match env.cur_qualifier, fqual with
+          (CpuOnly, CpuOnly)
+        | (CpuOnly, Both)
+        | (Vertex, GpuOnly)
+        | (Vertex, Both)
+        | (Fragment, GpuOnly)
+        | (Fragment, Both)
+        | (GpuOnly, GpuOnly)
+        | (GpuOnly, Both)
+        | (Both, Both) -> ()
+        |  _ -> raise (Failure ("cannot call " ^ string_of_func_qual fqual ^
+                  " function " ^ fname ^ " from " ^ 
+                  string_of_func_qual env.cur_qualifier ^ " function "
+                  ^ func.fname)))
+    in
+
     let rec lvalue need_lvalue env = function
         Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
       | StructDeref(e, m) as d -> let e' = lvalue need_lvalue env e in
@@ -371,6 +388,7 @@ let check program =
 				      " = " ^ string_of_typ rt ^ " in " ^ 
 				      string_of_expr ex)), SAssign(lval, e))
       | Call("upload_buffer", [buf; data]) as call ->
+          check_call_qualifiers env "upload_buffer" CpuOnly;
           let buf = expr env buf and data = expr env data in
           (match fst buf with
               Buffer(t) ->
@@ -385,6 +403,7 @@ let check program =
             | _ -> raise (Failure ("first parameter to upload_buffer must be " ^
                     "a buffer in " ^ string_of_expr call)))
       | Call("bind_pipeline", [p]) as call ->
+          check_call_qualifiers env "bind_pipeline" CpuOnly;
           let p' = expr env p in
           (match fst p' with
               Pipeline(_) ->
@@ -393,21 +412,7 @@ let check program =
               string_of_typ t ^ " instead of pipeline in " ^ 
               string_of_expr call)))
       | Call(fname, actuals) as call -> let fd = function_decl fname in
-          (match env.cur_qualifier, fd.fqual with
-              (CpuOnly, CpuOnly)
-            | (CpuOnly, Both)
-            | (Vertex, GpuOnly)
-            | (Vertex, Both)
-            | (Fragment, GpuOnly)
-            | (Fragment, Both)
-            | (GpuOnly, GpuOnly)
-            | (GpuOnly, Both)
-            | (Both, Both) -> ()
-            |  _ -> raise (Failure ("cannot call " ^ string_of_func_qual fd.fqual ^
-                      " function " ^ fname ^ " from " ^ 
-                      string_of_func_qual env.cur_qualifier ^ " function "
-                      ^ func.fname)))
-          ;
+          check_call_qualifiers env fname fd.fqual;
           if List.length actuals != List.length fd.formals then
             raise (Failure ("expecting " ^ string_of_int
               (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
