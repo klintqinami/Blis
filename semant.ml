@@ -404,8 +404,9 @@ let check program =
             | (GpuOnly, Both)
             | (Both, Both) -> ()
             |  _ -> raise (Failure ("cannot call " ^ string_of_func_qual fd.fqual ^
-                      " function from " ^ string_of_func_qual env.cur_qualifier ^
-                      " function")))
+                      " function " ^ fname ^ " from " ^ 
+                      string_of_func_qual env.cur_qualifier ^ " function "
+                      ^ func.fname)))
           ;
           if List.length actuals != List.length fd.formals then
             raise (Failure ("expecting " ^ string_of_int

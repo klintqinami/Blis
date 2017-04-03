@@ -1,1 +1,1 @@
-Fatal error: exception Failure("cannot call @cpuonly function from @gpu function")
+Fatal error: exception Failure("cannot call @cpuonly function foo from @gpu function bar")
