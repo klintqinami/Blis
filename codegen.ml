@@ -482,5 +482,6 @@ let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
 
   in
 
-  List.iter build_function_body functions;
+  List.iter build_function_body
+    (List.filter (fun f -> f.SA.sfqual = A.CpuOnly || f.SA.sfqual = A.Both) functions);
   the_module

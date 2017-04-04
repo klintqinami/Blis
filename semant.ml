@@ -550,6 +550,7 @@ let check program =
     {
       styp = func.typ;
       sfname = func.fname;
+      sfqual = func.fqual;
       sformals = func.formals;
       slocals = env.locals;
       sbody = List.rev sbody;
