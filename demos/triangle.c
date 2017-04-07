@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef __APPLE__
-#include <OpenGL/gl.h> /* Apple, y u special? */
+#include <OpenGL/gl3.h> /* Apple, y u special? */
 #else
 #include <GL/glew.h>
 #endif

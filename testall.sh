@@ -149,15 +149,6 @@ done
 
 shift `expr $OPTIND - 1`
 
-LLIFail() {
-  echo "Could not find the LLVM interpreter \"$LLI\"."
-  echo "Check your LLVM installation and/or modify the LLI variable in testall.sh"
-  exit 1
-}
-
-which "$LLI" >> $globallog || LLIFail
-
-
 if [ $# -ge 1 ]
 then
     files=$@

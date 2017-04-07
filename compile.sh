@@ -2,9 +2,14 @@
 set -e
 
 MICROC="./microc.native"
-LLC="llc"
 CC="cc"
-LIBS="-lGLEW -lGL -lglfw"
+if [[ `uname` == "Darwin" ]]; then
+  LLC="llc-3.8"
+  LIBS="-L/usr/local/lib/ -framework OpenGL -lglfw"
+else
+  LLC="llc"
+  LIBS="-lGLEW -lGL -lglfw"
+fi
 
 basename=$(basename "$1" .mc)
 llfile="${basename}.ll"
