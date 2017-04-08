@@ -70,7 +70,8 @@ type struct_decl = {
 
 type pipeline_decl = {
   pname : string;
-  inputs : bind list;
+  fshader : string;
+  vshader : string;
 }
 
 type program = {
@@ -178,7 +179,8 @@ let string_of_sdecl sdecl =
 
 let string_of_pdecl pdecl =
   "pipeline " ^ pdecl.pname ^ " {\n" ^
-  String.concat "" (List.map (fun b -> "in " ^ string_of_vdecl b) pdecl.inputs) ^
+  "@vertex " ^ pdecl.vshader ^ ";\n" ^
+  "@fragment " ^ pdecl.fshader ^ ";\n" ^
   "};\n"
 
 let string_of_program prog =

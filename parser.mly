@@ -85,13 +85,17 @@ sdecl:
 
 pdecl:
     PIPELINE ID LBRACE pdecl_list RBRACE SEMI { {
-      pname = $2;
-      inputs = List.rev $4.inputs
+      $4 with pname = $2;
     } }
 
 pdecl_list:
-    /* nothing */ { { pname = ""; inputs = [] } }
-  | pdecl_list IN bind SEMI  { { $1 with inputs = $3 :: $1.inputs } }
+  /* nothing */ { { pname = ""; fshader = ""; vshader = "" } }
+  | pdecl_list VERTEX ID SEMI  { if $1.vshader <> "" then
+      raise (Failure ("vertex shader declared twice")) else
+    { $1 with vshader = $3 } }
+  | pdecl_list FRAGMENT ID SEMI  { if $1.fshader <> "" then
+      raise (Failure ("fragment shader declared twice")) else
+    { $1 with fshader = $3 } }
 
 formals_opt:
     /* nothing */ { [] }

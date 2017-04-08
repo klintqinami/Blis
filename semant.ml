@@ -139,17 +139,6 @@ let check program =
     s.members)
   structs;
 
-  List.iter (fun p ->
-    report_duplicate
-      (fun i -> "duplicate input " ^ i ^ " of pipeline " ^ p.pname)
-      (List.map snd p.inputs)) pipelines;
-
-  List.iter (fun p ->
-    List.iter (fun i -> match fst i with
-        Buffer(_) -> ()
-      | _ -> raise (Failure ("input " ^ snd i ^ " of pipeline "  ^ p.pname ^
-              "is not a buffer"))) p.inputs) pipelines;
-
   let _ =
     (* function from struct name to a list of struct names used in its members *)
     let succs s = StringSet.elements (List.fold_left (fun succs m ->
@@ -256,6 +245,41 @@ let check program =
     ()
   ;
 
+  (* Check pipeline shaders, and add inputs to pipeline declarations.
+   * We want to do this after function_decls has been constructed.
+   *)
+
+  let pipelines = List.map (fun pd ->
+    if pd.fshader = "" then 
+      raise (Failure ("pipeline "  ^ pd.pname ^ 
+        " doesn't contain a fragment shader"))
+    else if pd.vshader = "" then
+      raise (Failure ("pipeline "  ^ pd.pname ^ 
+        " doesn't contain a vertex shader"))
+    else
+      let vert_decl = function_decl pd.vshader in
+      let frag_decl = function_decl pd.fshader in
+      if vert_decl.fqual <> Vertex then
+        raise (Failure
+         ("vertex entrypoint " ^ pd.vshader ^ " in pipeline " ^ pd.pname ^
+          "is not marked @vertex"))
+      else if frag_decl.fqual <> Fragment then
+        raise (Failure
+         ("fragment entrypoint " ^ pd.vshader ^ " in pipeline " ^ pd.pname ^
+          "is not marked @fragment"))
+      else
+        { spname = pd.pname;
+          sfshader = pd.fshader;
+          svshader = pd.vshader;
+          sinputs = List.map (fun (_, (t, n)) -> (Buffer(t), n))
+            (List.filter (fun (qual, _) -> qual = In) vert_decl.formals); })
+  pipelines
+  in
+
+  let pipeline_decls = List.fold_left (fun m p ->
+    StringMap.add p.spname p m) StringMap.empty pipelines
+  in
+
   let check_function func =
 
     List.iter (check_type
@@ -303,7 +327,7 @@ let check program =
             | Pipeline p ->
                 let ptype = StringMap.find p pipeline_decls in
                 (try
-                  fst (List.find (fun b -> snd b = m) ptype.inputs)
+                  fst (List.find (fun b -> snd b = m) ptype.sinputs)
                 with Not_found ->
                   raise (Failure ("pipeline " ^ p ^ " does not contain input " ^
                   m ^ " in " ^ string_of_expr d)))
@@ -532,6 +556,21 @@ let check program =
                   | None -> env, sstmts)
       (env, sstmts) sl
     in
+
+    (* check return type of shaders *)
+    (match func.fqual with
+        Vertex -> if func.typ <> Vec(Float, 4) then
+          raise (Failure ("vertex entrypoint " ^ func.fname ^
+            " must return vec4"))
+        else
+          ()
+      | Fragment -> if func.typ <> Void then
+          raise (Failure ("fragment entrypoint " ^ func.fname ^
+            " must return void"))
+        else
+          ()
+      | _ -> ())
+    ;
 
     let env = { env with cur_qualifier = func.fqual } in
 

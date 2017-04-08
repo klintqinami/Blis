@@ -15,6 +15,7 @@ http://llvm.moe/ocaml/
 module L = Llvm
 module A = Ast
 module SA = Sast
+module G = Glslcodegen
 
 module StringMap = Map.Make(String)
 
@@ -45,7 +46,14 @@ void main() {\n\
 }"
 
 
-let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
+let translate ((structs, pipelines, globals, functions) as program) =
+  let shaders = G.translate program in
+
+  (* ignore GPU functions for the rest of the codegen *)
+  let functions =
+    List.filter (fun f -> f.SA.sfqual = A.CpuOnly || f.SA.sfqual = A.Both)
+    functions in
+
   let context = L.global_context () in
   let the_module = L.create_module context "MicroC"
   and i32_t  = L.i32_type  context
@@ -83,7 +91,7 @@ let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
   in
 
   let pipeline_decls = List.fold_left (fun m p ->
-    StringMap.add p.A.pname p m) StringMap.empty pipelines
+    StringMap.add p.SA.spname p m) StringMap.empty pipelines
   in
 
   let struct_types = List.fold_left (fun m s ->
@@ -118,6 +126,12 @@ let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
     L.define_global "vshader" (L.const_stringz context vshader) the_module in
   let fshader_global =
     L.define_global "fshader" (L.const_stringz context fshader) the_module in
+
+  let shader_globals =
+    StringMap.mapi (fun name shader ->
+      L.define_global name (L.const_stringz context shader) the_module)
+    shaders
+  in
 
   (* Declare printf(), which the print built-in function will call *)
   let printf_t = L.var_arg_function_type i32_t [| voidp_t |] in
@@ -258,7 +272,7 @@ let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
       match l with
           (A.Buffer(A.Vec(A.Float, comp)), SA.SStructDeref((A.Pipeline(p), _) as e, m)) ->
             let pdecl = StringMap.find p pipeline_decls in
-            let location = index_of m (List.map snd pdecl.A.inputs) in
+            let location = index_of m (List.map snd pdecl.SA.sinputs) in
             let lval' = lvalue builder e in
             let e' = expr builder r in
             ignore (L.build_call pipeline_bind_vertex_buffer_func [|
@@ -276,7 +290,7 @@ let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
       | SA.SNoexpr -> L.const_int i32_t 0
       | SA.SStructDeref((A.Pipeline(p), _) as e, m) ->
           let pdecl = StringMap.find p pipeline_decls in
-          let location = index_of m (List.map snd pdecl.A.inputs) in
+          let location = index_of m (List.map snd pdecl.SA.sinputs) in
           let e' = lvalue builder e in
           L.build_call pipeline_get_vertex_buffer_func [|
             e'; L.const_int i32_t location |] "" builder
@@ -366,11 +380,14 @@ let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
                   (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
               ((L.undef (ltype_of_typ (fst sexpr))), 0) act)
             | A.Buffer(_) -> L.build_call create_buffer_func [| |] "" builder
-            | A.Pipeline(_) ->
+            | A.Pipeline(p) ->
+                let pdecl = StringMap.find p pipeline_decls in
+                let fshader = StringMap.find pdecl.SA.sfshader shader_globals in
+                let vshader = StringMap.find pdecl.SA.svshader shader_globals in
                 let tmp = L.build_alloca pipeline_t "pipeline_tmp" builder in
-                let v = L.build_gep vshader_global [|
+                let v = L.build_gep vshader [|
                   L.const_int i32_t 0; L.const_int i32_t 0 |] "" builder in
-                let f = L.build_gep fshader_global [|
+                let f = L.build_gep fshader [|
                   L.const_int i32_t 0; L.const_int i32_t 0 |] "" builder in
                 ignore
                   (L.build_call create_pipeline_func [| tmp; v; f |] "" builder);
@@ -482,6 +499,5 @@ let translate ((structs, pipelines, globals, functions) : SA.sprogram) =
 
   in
 
-  List.iter build_function_body
-    (List.filter (fun f -> f.SA.sfqual = A.CpuOnly || f.SA.sfqual = A.Both) functions);
+  List.iter build_function_body functions;
   the_module
