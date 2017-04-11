@@ -15,7 +15,7 @@ pipeline my_pipeline {
 
 int main()
 {
-  window win = window(1024, 768);
+  window win = window(1024, 768, false);
 
   set_active_window(win);
 

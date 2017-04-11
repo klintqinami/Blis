@@ -140,7 +140,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
   (* Declare functions in the built-in library that call into GLFW and OpenGL *)
   let init_t = L.function_type void_t [| |] in
   let init_func = L.declare_function "init" init_t the_module in
-  let create_window_t = L.function_type voidp_t [| i32_t; i32_t |] in
+  let create_window_t = L.function_type voidp_t [| i32_t; i32_t; i32_t |] in
   let create_window_func =
     L.declare_function "create_window" create_window_t the_module in
   let set_active_window_t = L.function_type void_t [| voidp_t |] in
@@ -182,6 +182,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let should_close_t = L.function_type i32_t [| voidp_t |] in
   let should_close_func =
     L.declare_function "glfwWindowShouldClose" should_close_t the_module in
+  let read_pixel_t =
+    L.function_type void_t [| i32_t; i32_t; L.pointer_type vec_t.(3) |] in
+  let read_pixel_func =
+    L.declare_function "read_pixel" read_pixel_t the_module in
 
   (* Define each function (arguments and return type) so we can call it *)
   let function_decls =
@@ -364,6 +368,12 @@ let translate ((structs, pipelines, globals, functions) as program) =
           L.build_icmp L.Icmp.Ne
             (L.build_call should_close_func [| w' |]  "" builder)
             (L.const_int i32_t 0) "" builder
+      | SA.SCall ("read_pixel", [x; y]) ->
+          let tmp = L.build_alloca vec_t.(3) "" builder in
+          let x' = expr builder x in
+          let y' = expr builder y in
+          ignore (L.build_call read_pixel_func [| x'; y'; tmp |] "" builder);
+          L.build_load tmp "" builder
       | SA.SCall (f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in
 	 let actuals = List.rev (List.map2 (fun (q, (_, _)) e ->
@@ -394,8 +404,14 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 L.build_load tmp "" builder
             | A.Window ->
                 (match act with
-                    [w; h] -> L.build_call create_window_func
-                      [| (expr builder w); (expr builder h) |] "" builder
+                    [w; h; offscreen] ->
+                      let w' = expr builder w in
+                      let h' = expr builder h in
+                      let offscreen' =
+                        L.build_zext (expr builder offscreen) i32_t "" builder
+                      in
+                      L.build_call create_window_func
+                        [| w'; h'; offscreen' |] "" builder
                   | _ -> raise (Failure "shouldn't get here"))
             | _ -> raise (Failure "shouldn't get here")
 

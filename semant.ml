@@ -221,6 +221,9 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = Vec(Bool, 1); fname = "window_should_close";
        formals = [In, (Window, "w")]; fqual = CpuOnly; body = [] };
+     { typ = Vec(Float, 4); fname = "read_pixel";
+       formals = [In, (Vec(Int, 1), "x"); In, (Vec(Int, 1), "y")];
+       fqual = CpuOnly; body = [] };
     ]
   in
 
@@ -481,7 +484,7 @@ let check program =
             | Array(t, s) -> handle_array_vec t s
             | Buffer(t) -> check_buffer_type t; check_cons []
             | Pipeline(_) -> check_cons []
-            | Window -> check_cons [Vec(Int, 1); Vec(Int, 1)]
+            | Window -> check_cons [Vec(Int, 1); Vec(Int, 1); Vec(Bool, 1)]
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));
                   

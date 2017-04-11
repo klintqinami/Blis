@@ -105,6 +105,11 @@ void bind_pipeline(struct pipeline *p)
   glBindVertexArray(p->vertex_array);
 }
 
+void read_pixel(int x, int y, float *pixel)
+{
+  glReadPixels(x, y, 1, 1, GL_RGBA, GL_FLOAT, pixel);
+}
+
 void init(void)
 {
   if (!glfwInit()) {
@@ -121,8 +126,13 @@ void init(void)
 }
 
 /* TODO: when we get string support, add a string for the name */
-GLFWwindow *create_window(int width, int height)
+GLFWwindow *create_window(int width, int height, int offscreen)
 {
+  if (offscreen)
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+  else
+    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+
   GLFWwindow *window = glfwCreateWindow(width, height, "Blis", NULL, NULL);
   if (!window) {
     fprintf(stderr, "failed to create window\n");
