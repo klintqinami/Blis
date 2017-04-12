@@ -108,6 +108,11 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     (env, string_of_base_typ typ ^ " " ^ new_name ^ string_of_array typ)
   in
 
+  let make_tmp env typ =
+    let env, tmp = add_symbol_table env "" in
+    (env, string_of_base_typ typ ^ " " ^ tmp ^ string_of_array typ, tmp)
+  in
+
   (* TODO need to remap struct member names, reorder struct decls *)
   (*let glsl_structs = String.concat "\n\n"
     (List.map (fun sdecl ->
@@ -166,10 +171,10 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           let env, stmts, elist' = expr_list env stmts elist
           in
           (* since calls can have side-effects, make a separate statement *)
-          let env, tmp = string_of_bind env (typ, "")
+          let env, bind, tmp = make_tmp env typ
           in
           (env, stmts ^
-           tmp ^ " = " ^ StringMap.find name func_names ^ "(" ^ elist' ^ ");\n",
+           bind ^ " = " ^ StringMap.find name func_names ^ "(" ^ elist' ^ ");\n",
            tmp)
       | SA.SNoexpr -> (env, stmts, "")
 
