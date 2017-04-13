@@ -53,6 +53,58 @@ type spipeline_decl = {
 
 type sprogram = struct_decl list * spipeline_decl list * bind list * sfunc_decl list
 
+
+(* do a pre-order traversal of all expression trees, calling 'f' and
+ * accumulating the results
+ *)
+let fold_sfdecl_pre f a sfdecl =
+  let rec fold_expr_pre a e =
+    let a = f a e in
+    match snd e with
+        SStructDeref(e, _) -> fold_expr_pre a e
+      | SArrayDeref(e, idx) ->
+          let a = fold_expr_pre a e in
+          fold_expr_pre a idx
+      | SBinop(e1, _, e2) ->
+          let a = fold_expr_pre a e1 in
+          fold_expr_pre a e2
+      | SUnop(_, e) -> fold_expr_pre a e
+      | SAssign(e1, e2) ->
+          let a = fold_expr_pre a e1 in
+          fold_expr_pre a e2
+      | STypeCons(elist) -> fold_exprs_pre a elist
+      | SCall(_, elist) -> fold_exprs_pre a elist
+      | SIntLit(_) | SFloatLit(_) | SBoolLit(_) | SId(_) | SNoexpr ->
+          a
+  and fold_exprs_pre a elist = List.fold_left fold_expr_pre a elist
+  in
+
+  let rec fold_stmt_pre a = function
+      SExpr(e) -> fold_expr_pre a e
+    | SReturn(e) -> fold_expr_pre a e
+    | SIf(pred, then_body, else_body) ->
+        let a = fold_expr_pre a pred in
+        let a = fold_stmts_pre a then_body in
+        fold_stmts_pre a else_body
+    | SFor(e1, e2, e3, body) ->
+        let a = fold_expr_pre a e1 in
+        let a = fold_expr_pre a e2 in
+        let a = fold_expr_pre a e3 in
+        fold_stmts_pre a body
+    | SWhile(pred, body) ->
+        let a = fold_expr_pre a pred in
+        fold_stmts_pre a body
+    | SBreak -> a
+    | SContinue -> a
+  and fold_stmts_pre a elist =
+    List.fold_left fold_stmt_pre a elist
+  in
+
+  fold_stmts_pre a sfdecl.sbody
+
+
+
+
 (* Pretty-printing functions *)
 
 let string_of_sop = function

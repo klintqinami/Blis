@@ -1,0 +1,1 @@
+Fatal error: exception Failure("recursive call by not-CPU-only functions: bar -> foo -> bar")

@@ -2,6 +2,7 @@
 
 open Ast
 open Sast
+open Utils
 
 module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
@@ -139,26 +140,18 @@ let check program =
     s.members)
   structs;
 
-  let _ =
+  (* sort structures and check for cycles in the definitions *)
+  let structs =
     (* function from struct name to a list of struct names used in its members *)
-    let succs s = StringSet.elements (List.fold_left (fun succs m ->
+    let succs s = List.fold_left (fun succs m ->
       match fst m with
-          Struct succ -> StringSet.add succ succs
+          Struct name -> StringMap.find name struct_decls :: succs
         | _ -> succs)
-    StringSet.empty (StringMap.find s struct_decls).members)
+    [] s.members
     in
-    let rec tsort path visited = function
-        [] -> visited
-      | n :: nodes -> 
-          if List.mem n path then
-            raise (Failure ("cycle in struct definitions: " ^
-              String.concat " -> " (List.rev (n :: path))))
-          else
-            let v' = if List.mem n visited then visited else
-              n :: tsort (n :: path) visited (succs n)
-            in tsort path v' nodes
-    in
-    ignore (tsort [] [] (List.map (fun s -> s.sname) structs))
+    tsort structs succs (fun cycle ->
+      raise (Failure ("cycle in struct definitions: " ^
+        String.concat " -> " (List.map (fun s -> s.sname) cycle))))
   in
    
   (* Add struct constructors to function declarations *)
@@ -600,4 +593,35 @@ let check program =
 
    
   in
-  (structs, pipelines, globals, List.map check_function functions)
+
+  let functions = List.map check_function functions
+  in
+
+  let function_decls = List.fold_left (fun m fd -> StringMap.add fd.sfname fd m)
+                         StringMap.empty functions
+  in
+
+  (* do a topological sort of the GPU-only function call graph to check for
+   * loops, and to ensure that functions are always defined before they're
+   * called for the GLSL backend since GLSL cares about the ordering.
+   *)
+  let func_succs fdecl =
+    fold_sfdecl_pre (fun calls expr ->
+      match snd expr with
+          SCall(name, _) -> StringMap.find name function_decls :: calls
+        | _ -> calls)
+    [] fdecl
+  in
+  let gpu_functions = List.filter (fun fdecl ->
+    match fdecl.sfqual with
+        GpuOnly | Fragment | Vertex | Both -> true
+      | CpuOnly -> false) functions
+  in
+  let cpu_functions = List.filter (fun fdecl ->
+    fdecl.sfqual = CpuOnly) functions
+  in
+  let gpu_functions = tsort gpu_functions func_succs (fun cycle ->
+    raise (Failure ("recursive call by not-CPU-only functions: " ^
+      String.concat " -> " (List.map (fun f -> f.sfname) cycle))))
+  in
+  (structs, pipelines, globals, gpu_functions @ cpu_functions)
