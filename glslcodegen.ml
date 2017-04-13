@@ -48,7 +48,7 @@ let get_name orig used =
 let add_symbol_table env name =
   let new_name = get_name name env.used_var_names in
   ({ env with scope = StringMap.add name new_name env.scope;
-     used_var_names = StringSet.add name env.used_var_names; },
+     used_var_names = StringSet.add new_name env.used_var_names; },
    new_name)
 
 let translate ((structs, _, _, functions) : SA.sprogram) =
