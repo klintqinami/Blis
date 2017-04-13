@@ -29,22 +29,6 @@ let index_of e l =
   in
 index_of' 0 l
 
-(* hardcode the vertex and fragment shaders for now... *)
-
-let vshader = "#version 330 core\n\
-layout(location = 0) in vec3 in_pos;\n\
-\n\
-void main() {\n\
-  gl_Position = vec4(in_pos, 1.0);\n\
-}"
-
-let fshader = "#version 330 core\n\
-out vec3 color;\n\
-\n\
-void main() {\n\
-  color = vec3(1.0, 0.0, 0.0);\n\
-}"
-
 
 let translate ((structs, pipelines, globals, functions) as program) =
   let shaders = G.translate program in
@@ -121,11 +105,6 @@ let translate ((structs, pipelines, globals, functions) as program) =
       let init = L.undef (ltype_of_typ t)
       in StringMap.add n (L.define_global n init the_module) m in
     List.fold_left global_var StringMap.empty globals in
-
-  let vshader_global =
-    L.define_global "vshader" (L.const_stringz context vshader) the_module in
-  let fshader_global =
-    L.define_global "fshader" (L.const_stringz context fshader) the_module in
 
   let shader_globals =
     StringMap.mapi (fun name shader ->
