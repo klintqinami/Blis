@@ -81,6 +81,10 @@ type program = {
   func_decls : func_decl list;
 }
 
+let rec base_type = function
+    Array(typ, _) -> base_type typ
+  | _ as typ -> typ
+
 (* Pretty-printing functions *)
 
 let string_of_op = function

@@ -144,7 +144,7 @@ let check program =
   let structs =
     (* function from struct name to a list of struct names used in its members *)
     let succs s = List.fold_left (fun succs m ->
-      match fst m with
+      match base_type (fst m) with
           Struct name -> StringMap.find name struct_decls :: succs
         | _ -> succs)
     [] s.members
