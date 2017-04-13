@@ -18,7 +18,7 @@ pipeline my_pipeline {
 
 int main()
 {
-  window win = window(100, 100, true);
+  window win = window(10, 10, true);
 
   set_active_window(win);
 
@@ -41,8 +41,8 @@ int main()
   int x;
   int y;
 
-  for (y = 0; y < 100; y = y + 1) {
-    for (x = 0; x < 100; x = x + 1) {
+  for (y = 0; y < 10; y = y + 1) {
+    for (x = 0; x < 10; x = x + 1) {
       vec4 pixel = read_pixel(x, y);
       if (pixel.x != 0. || pixel.y != 1. || pixel.z != 0.) {
         print(x);
