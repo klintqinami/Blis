@@ -112,7 +112,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
   (* structs and functions share a namespace in GLSL, so use the same table to
    * translate the names for them.
    *)
-  let struct_func_table =
+  let struct_table =
     List.fold_left (fun table sdecl ->
       fst (add_symbol_table table sdecl.A.sname))
     { used_names = StringSet.singleton "dummy_struct";
@@ -120,10 +120,10 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     structs 
   in
 
-  let struct_func_table =
+  let func_table =
     List.fold_left (fun table fdecl ->
       fst (add_symbol_table table fdecl.SA.sfname))
-    struct_func_table functions
+    struct_table functions
   in
 
   (* returns the GLSL type for the Blis type stripped of array-ness
@@ -136,7 +136,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     | A.Vec(A.Int, n) -> "ivec" ^ string_of_int n
     | A.Vec(A.Float, n) -> "vec" ^ string_of_int n
     | A.Vec(A.Bool, n) -> "bvec" ^ string_of_int n
-    | A.Struct(name) -> StringMap.find name struct_func_table.scope
+    | A.Struct(name) -> StringMap.find name struct_table.scope
     | A.Buffer(_) -> "dummy_struct"
     | A.Window -> "dummy_struct"
     | A.Pipeline(_) -> "dummy_struct"
@@ -166,14 +166,25 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     (env, string_of_base_typ typ ^ " " ^ tmp ^ string_of_array typ, tmp)
   in
 
-  (* TODO need to remap struct member names, reorder struct decls *)
-  (*let glsl_structs = String.concat "\n\n"
+  let struct_members = List.fold_left (fun map sdecl ->
+    let table = List.fold_left (fun table (_, name) ->
+      fst (add_symbol_table table name)) empty_table sdecl.A.members
+    in
+    StringMap.add sdecl.A.sname table map)
+  StringMap.empty structs
+  in
+
+  let glsl_structs = String.concat "\n\n"
     (List.map (fun sdecl ->
-    "struct " ^ StringMap.find sdecl.A.sname struct_names ^ " {\n" ^
-    (String.concat "\n" (List.map (fun mem ->
-      string_of_bind mem ^ ";") sdecl.A.members)) ^
-    "\n};") structs) ^ "\n\n"
-  in*)
+      let members = StringMap.find sdecl.A.sname struct_members in
+      let glsl_name = StringMap.find sdecl.A.sname struct_table.scope in
+      "struct " ^ glsl_name ^ " {\n" ^
+      (String.concat "\n" (List.map (fun (typ, name) ->
+        let glsl_name = StringMap.find name members.scope in
+        string_of_base_typ typ ^ " " ^ glsl_name ^ string_of_array typ ^ ";")
+      sdecl.A.members)) ^
+      "\n};") structs) ^ "\n\n"
+  in
 
   let rec translate_stmts env slist =
     let rec expr env stmts (typ, e) = match e with
@@ -182,8 +193,12 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       | SA.SBoolLit(b) -> (env, stmts, if b then "true" else "false")
       | SA.SId(n) -> (env, stmts, StringMap.find n env.table.scope)
       | SA.SStructDeref(e, mem) -> let env, stmts, e' = expr env stmts e in
-          (match typ with
+          (match fst e with
               A.Vec(_, _) -> (env, stmts, "(" ^ e' ^ ")." ^ mem)
+            | A.Struct(name) ->
+                let members = StringMap.find name struct_members in
+                let glsl_mem = StringMap.find mem members.scope in
+                (env, stmts, "(" ^ e' ^ ")." ^ glsl_mem)
             | _ -> raise (Failure "unimplemented"))
       | SA.SArrayDeref(e, idx) ->
           let env, stmts, e' = expr env stmts e in
@@ -227,7 +242,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           let env, bind, tmp = make_tmp env typ
           in
           (env, stmts ^
-           bind ^ " = " ^ StringMap.find name struct_func_table.scope ^ "(" ^ elist' ^ ");\n",
+           bind ^ " = " ^ StringMap.find name func_table.scope ^ "(" ^ elist' ^ ");\n",
            tmp)
       | SA.SNoexpr -> (env, stmts, "")
 
@@ -300,7 +315,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     in
     let env = { env with cur_qualifier = fdecl.SA.sfqual }
     in
-    let name = StringMap.find fdecl.SA.sfname struct_func_table.scope
+    let name = StringMap.find fdecl.SA.sfname func_table.scope
     in
     string_of_typ fdecl.SA.styp ^ " " ^ name ^
     "(" ^ formals ^ ") {\n" ^ locals ^ translate_stmts env fdecl.SA.sbody ^ "}"
@@ -339,7 +354,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     in
     "#version 330\n" ^
     "struct dummy_struct {int dummy;};\n\n"
-    (*^ glsl_structs*) ^ glsl_funcs ^ io_decls ^
+    ^ glsl_structs ^ glsl_funcs ^ io_decls ^
     (* the entrypoint itself becomes main() *)
     "\n\nvoid main() {\n" ^ locals ^ translate_stmts env fdecl.SA.sbody ^ "}"
   in
