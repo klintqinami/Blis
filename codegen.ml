@@ -89,7 +89,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
     | A.Vec(A.Bool, w) -> bvec_t.(w-1)
     | A.Vec(A.Byte, w) -> byte_vec_t.(w-1)
     | A.Struct s -> StringMap.find s struct_types
-    | A.Array(t, s) -> L.array_type (ltype_of_typ t) s
+    | A.Array(t, Some s) -> L.array_type (ltype_of_typ t) s
+    | A.Array(t, None)-> L.struct_type context [| i32_t; L.pointer_type (ltype_of_typ t) |]
     | A.Window -> voidp_t
     | A.Pipeline(_) -> pipeline_t
     | A.Buffer(_) -> i32_t
@@ -215,13 +216,6 @@ let translate ((structs, pipelines, globals, functions) as program) =
                    with Not_found -> StringMap.find n global_vars
     in
 
-    (* get an LLVM value representing the size of an array in bytes *)
-    let array_size = function
-        A.Array(A.Vec(A.Float, s), n) -> L.const_int i32_t (4 * s * n)
-      | _ -> raise Not_found (* TODO handle other cases *)
-    in
-
-
     (* evaluates an expression and returns a pointer to its value. If the
      * expression is an lvalue, guarantees that the pointer is to the memory
      * referenced by the lvalue.
@@ -248,7 +242,13 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SArrayDeref (e, i) ->
           let e' = lvalue builder e in
           let i' = expr builder i in
-          L.build_gep e' [| L.const_int i32_t 0; i' |] "tmp" builder
+          (match (fst e) with
+            A.Array(_, Some _) -> L.build_gep e' [| L.const_int i32_t 0; i' |]
+              "tmp" builder
+          | A.Array(_, None) -> L.build_gep
+            (L.build_extractvalue (L.build_load e' "" builder) 1 "" builder)
+            [| i' |] "tmp" builder
+          | _ -> raise (Failure "not supported"))
       | _ -> let e' = expr builder sexpr in
           let temp =
             L.build_alloca (ltype_of_typ (fst sexpr)) "expr_tmp" builder in
@@ -335,8 +335,15 @@ let translate ((structs, pipelines, globals, functions) as program) =
           L.build_call set_active_window_func [| expr builder w |] "" builder
       | SA.SCall ("upload_buffer", [buf; data]) ->
           let buf' = expr builder buf in
-          let data' = L.build_bitcast (lvalue builder data) voidp_t "" builder in
-          let size = array_size (fst data) in
+          let data', size = (match (fst data) with
+            A.Array(A.Vec(A.Float, s), Some n) ->
+              (lvalue builder data, L.const_int i32_t (4 * s * n))
+          | A.Array(A.Vec(A.Float, n), None) -> let s = expr builder data in
+              (L.build_extractvalue s 1 "" builder,
+              L.build_mul (L.const_int i32_t (4 * n))
+              (L.build_extractvalue s 0 "" builder) "" builder)
+          | _ -> raise (Failure "not supported")) in
+          let data' = L.build_bitcast data' voidp_t "" builder in
           L.build_call upload_buffer_func
             [| buf'; data'; size; L.const_int i32_t 0x88E4 (* GL_STATIC_DRAW *) |] "" builder
       | SA.SCall ("bind_pipeline", [p]) ->
@@ -371,11 +378,16 @@ let translate ((structs, pipelines, globals, functions) as program) =
          L.build_call fdef (Array.of_list actuals) result builder
       | SA.STypeCons act ->
           match fst sexpr with
-              A.Vec(_, _) | A.Array(_, _) ->
+              A.Vec(_, _) | A.Array(_, Some _) ->
                 fst (List.fold_left (fun (agg, idx) e ->
                   let e' = expr builder e in
                   (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
               ((L.undef (ltype_of_typ (fst sexpr))), 0) act)
+            | A.Array(t, None) -> let s = expr builder (List.hd act) in
+              let a = L.undef (ltype_of_typ (fst sexpr)) in
+              let a = L.build_insertvalue a s 0 "" builder in
+              L.build_insertvalue a (L.build_array_malloc
+                (ltype_of_typ t) s "" builder) 1 "" builder 
             | A.Buffer(_) -> L.build_call create_buffer_func [| |] "" builder
             | A.Pipeline(p) ->
                 let pdecl = StringMap.find p pipeline_decls in

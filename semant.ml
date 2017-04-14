@@ -347,7 +347,10 @@ let check program =
               string_of_typ (fst i') ^ " instead of int in " ^
               string_of_expr d))
           else (match fst e' with
-              Array(t, _) -> (t, SArrayDeref(e', i'))
+              Array(t, Some(_)) -> (t, SArrayDeref(e', i'))
+            | Array(t, None) -> if env.cur_qualifier = CpuOnly
+                then (t, SArrayDeref(e', i'))
+                else raise (Failure "variable sized arrays cannot be used in GPU code")
             | _ -> raise (Failure ("array dereference of non-array type in " ^
                       string_of_expr d)))
       | _ as e ->
@@ -362,7 +365,7 @@ let check program =
       | FloatLit(l) -> (Vec(Float, 1), SFloatLit(l))
       | BoolLit(l) -> (Vec(Bool, 1), SBoolLit(l))
       | CharLit(c) -> (Vec(Byte, 1), SCharLit(c))
-      | StringLit(s) -> (Array(Vec(Byte, 1), String.length s), SStringLit(s))
+      | StringLit(s) -> (Array(Vec(Byte, 1), Some (String.length s)), SStringLit(s))
       | Id _ | StructDeref(_, _) | ArrayDeref(_, _) as e -> lvalue false env e
       | Binop(e1, op, e2) as e -> let e1 = expr env e1 and e2 = expr env e2 in
         let t1 = fst e1 and t2 = fst e2 in
@@ -479,7 +482,8 @@ let check program =
                *)
             | Struct s -> expr env (Call(s, actuals))
             | Vec(b, w) -> handle_array_vec (Vec(b, 1)) w
-            | Array(t, s) -> handle_array_vec t s
+            | Array(t, Some s) -> handle_array_vec t s
+            | Array(_, None) -> check_cons [Vec(Int, 1)]
             | Buffer(t) -> check_buffer_type t; check_cons []
             | Pipeline(_) -> check_cons []
             | Window -> check_cons [Vec(Int, 1); Vec(Int, 1); Vec(Bool, 1)]

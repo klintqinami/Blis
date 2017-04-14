@@ -114,7 +114,8 @@ formal_qualifier:
   
 arrays:
     /* nothing */ { [] }
-  | arrays LBRACKET INT_LITERAL RBRACKET { $3 :: $1 }
+  | arrays LBRACKET INT_LITERAL RBRACKET { Some $3 :: $1 }
+  | arrays LBRACKET RBRACKET { None :: $1 }
 
 no_array_typ:
     INT { Vec(Int, 1) }

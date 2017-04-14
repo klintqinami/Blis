@@ -9,7 +9,7 @@ type base_type = Float | Int | Byte | Bool
 
 type typ =
     Vec of base_type * int
-  | Array of typ * int
+  | Array of typ * int option
   | Struct of string
   | Buffer of typ
   | Pipeline of string
@@ -119,7 +119,8 @@ let rec string_of_typ = function
   | Struct s -> "struct " ^ s
   | Pipeline p -> "pipeline " ^ p
   | Buffer t -> "buffer" ^ "<" ^ string_of_typ t ^ ">"
-  | Array(t, s) -> string_of_typ t ^ "[" ^ string_of_int s ^ "]"
+  | Array(t, s) -> string_of_typ t ^ "[" ^
+      (match s with Some(w) -> string_of_int w | _ -> "") ^ "]"
   | Window -> "window"
   | Void -> "void"
 

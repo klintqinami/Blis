@@ -151,7 +151,9 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
    * for example, returns "[10][2]" for vec4[10][2]
    *)
   let rec string_of_array = function
-      A.Array(typ, n) -> "[" ^ string_of_int n ^ "]" ^ string_of_array typ
+      A.Array(typ, n) -> "[" ^
+        (match n with Some(w) -> string_of_int w | _ -> "0") ^ "]"
+        ^ string_of_array typ
     | _ -> ""
   in
 
