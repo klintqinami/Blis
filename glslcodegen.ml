@@ -8,9 +8,18 @@ module SA = Sast
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
 
-type translation_environment = {
+type symbol_table = {
   scope : string StringMap.t;
-  used_var_names : StringSet.t;
+  used_names : StringSet.t;
+}
+
+let empty_table = {
+  scope = StringMap.empty;
+  used_names = StringSet.empty;
+}
+
+type translation_environment = {
+  table : symbol_table;
   cur_qualifier : A.func_qualifier;
 }
 
@@ -20,7 +29,7 @@ type translation_environment = {
  *
  * TODO handle GLSL keywords
  *)
-let get_name orig used =
+let add_symbol_table table orig =
   (* copied from the GLSL 3.30 spec. The weird line wrapping is identical to the
    * PDF to ease comparisons.
    *)
@@ -73,45 +82,48 @@ let get_name orig used =
    * change it to "_"
    *)
   let orig' = if orig' = "" then "_" else orig' in
-  if not (StringSet.mem orig' used) then
+  let orig' = if not (StringSet.mem orig' table.used_names) then
     orig'
   else
     (* keep appending digits until we get a new name *)
-    let rec get_name' orig n =
+    let rec get_name orig n =
       let orig' = orig ^ string_of_int n in
-        if not (StringSet.mem orig' used) then
+        if not (StringSet.mem orig' table.used_names) then
           orig'
         else
-          get_name' orig (n + 1)
+          get_name orig (n + 1)
     in
-    get_name' orig' 0
+    get_name orig' 0
+  in
+  ({ scope = StringMap.add orig orig' table.scope;
+    used_names = StringSet.add orig' table.used_names }, orig')
 
-let add_symbol_table env name =
-  let new_name = get_name name env.used_var_names in
-  ({ env with scope = StringMap.add name new_name env.scope;
-     used_var_names = StringSet.add new_name env.used_var_names; },
-   new_name)
+let add_variable_name env name =
+  let table', new_name = add_symbol_table env.table name in
+  ({ env with table = table' }, new_name)
 
 let translate ((structs, _, _, functions) : SA.sprogram) =
   let env = {
-    scope = StringMap.empty;
-    used_var_names = StringSet.empty;
+    table = empty_table;
     cur_qualifier = A.Both;
   }
   in
 
-  let used, struct_names =
-    List.fold_left (fun (used, names) sdecl ->
-      let new_name = get_name sdecl.A.sname used in
-      StringSet.add new_name used, StringMap.add sdecl.A.sname new_name names)
-    (StringSet.singleton "dummy_struct", StringMap.empty) structs 
+  (* structs and functions share a namespace in GLSL, so use the same table to
+   * translate the names for them.
+   *)
+  let struct_func_table =
+    List.fold_left (fun table sdecl ->
+      fst (add_symbol_table table sdecl.A.sname))
+    { used_names = StringSet.singleton "dummy_struct";
+      scope = StringMap.empty }
+    structs 
   in
 
-  let _, func_names =
-    List.fold_left (fun (used, names) fdecl ->
-      let new_name = get_name fdecl.SA.sfname used in
-      StringSet.add new_name used, StringMap.add fdecl.SA.sfname new_name names)
-    (used, StringMap.empty) functions
+  let struct_func_table =
+    List.fold_left (fun table fdecl ->
+      fst (add_symbol_table table fdecl.SA.sfname))
+    struct_func_table functions
   in
 
   (* returns the GLSL type for the Blis type stripped of array-ness
@@ -124,7 +136,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     | A.Vec(A.Int, n) -> "ivec" ^ string_of_int n
     | A.Vec(A.Float, n) -> "vec" ^ string_of_int n
     | A.Vec(A.Bool, n) -> "bvec" ^ string_of_int n
-    | A.Struct(name) -> StringMap.find name struct_names
+    | A.Struct(name) -> StringMap.find name struct_func_table.scope
     | A.Buffer(_) -> "dummy_struct"
     | A.Window -> "dummy_struct"
     | A.Pipeline(_) -> "dummy_struct"
@@ -145,12 +157,12 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
   in
 
   let string_of_bind env (typ, name) =
-    let env, new_name = add_symbol_table env name in
+    let env, new_name = add_variable_name env name in
     (env, string_of_base_typ typ ^ " " ^ new_name ^ string_of_array typ)
   in
 
   let make_tmp env typ =
-    let env, tmp = add_symbol_table env "" in
+    let env, tmp = add_variable_name env "" in
     (env, string_of_base_typ typ ^ " " ^ tmp ^ string_of_array typ, tmp)
   in
 
@@ -168,7 +180,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
         SA.SIntLit(i) -> (env, stmts, string_of_int i)
       | SA.SFloatLit(f) -> (env, stmts, string_of_float f)
       | SA.SBoolLit(b) -> (env, stmts, if b then "true" else "false")
-      | SA.SId(n) -> (env, stmts, StringMap.find n env.scope)
+      | SA.SId(n) -> (env, stmts, StringMap.find n env.table.scope)
       | SA.SStructDeref(e, mem) -> let env, stmts, e' = expr env stmts e in
           (match typ with
               A.Vec(_, _) -> (env, stmts, "(" ^ e' ^ ")." ^ mem)
@@ -215,7 +227,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           let env, bind, tmp = make_tmp env typ
           in
           (env, stmts ^
-           bind ^ " = " ^ StringMap.find name func_names ^ "(" ^ elist' ^ ");\n",
+           bind ^ " = " ^ StringMap.find name struct_func_table.scope ^ "(" ^ elist' ^ ");\n",
            tmp)
       | SA.SNoexpr -> (env, stmts, "")
 
@@ -288,7 +300,9 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     in
     let env = { env with cur_qualifier = fdecl.SA.sfqual }
     in
-    string_of_typ fdecl.SA.styp ^ " " ^ StringMap.find fdecl.SA.sfname func_names ^
+    let name = StringMap.find fdecl.SA.sfname struct_func_table.scope
+    in
+    string_of_typ fdecl.SA.styp ^ " " ^ name ^
     "(" ^ formals ^ ") {\n" ^ locals ^ translate_stmts env fdecl.SA.sbody ^ "}"
   in
 
