@@ -355,9 +355,9 @@ let translate ((structs, pipelines, globals, functions) as program) =
           L.build_load tmp "" builder
       | SA.SCall (f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in
-	 let actuals = List.rev (List.map2 (fun (q, (_, _)) e ->
+	 let actuals = (List.map2 (fun (q, (_, _)) e ->
            if q = A.In then expr builder e
-           else lvalue builder e) fdecl.SA.sformals (List.rev act)) in
+           else lvalue builder e) fdecl.SA.sformals act) in
 	 let result = (match fdecl.SA.styp with A.Void -> ""
                                             | _ -> f ^ "_result") in
          L.build_call fdef (Array.of_list actuals) result builder

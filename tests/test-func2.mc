@@ -10,7 +10,7 @@ int main()
   int i;
   i = 1;
 
-  fun(i = 2, i = i+1);
+  fun(i = i+1, i = 2);
 
   print(i);
   return 0;
