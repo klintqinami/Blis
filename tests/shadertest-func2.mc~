@@ -14,7 +14,3 @@
   else
     color = vec3(1., 0., 0.);
 }
-
-/* see test-func2. There is a discrepancy between the behavior of
- * fun when it is run on cpu vs. gpu
- */
