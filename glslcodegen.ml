@@ -286,8 +286,8 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           let body_string = translate_stmts env body in
           (env, stmts ^
            "while (" ^ cond' ^ ") {\n" ^ body_string ^ "}\n")
-      | SA.SBreak -> (env, "break;\n")
-      | SA.SContinue -> (env, "continue;\n")
+      | SA.SBreak -> (env, stmts ^ "break;\n")
+      | SA.SContinue -> (env, stmts ^ "continue;\n")
     in
 
     snd (List.fold_left stmt (env, "") slist)
