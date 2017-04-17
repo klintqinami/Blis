@@ -197,12 +197,15 @@ let check program =
   (* Function declaration for a named function *)
 
   let built_in_decls =
-    let int1 = Vec(Int, 1) and bool1 = Vec(Bool, 1) and float1 = Vec(Float, 1) in [
+    let int1 = Vec(Int, 1) and bool1 = Vec(Bool, 1) and float1 = Vec(Float, 1)
+    and byte1 = Vec(Byte, 1) in [
      { typ = Void; fname = "print"; formals = [In, (int1, "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printb"; formals = [In, (bool1, "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printf"; formals = [In, (float1, "x")];
+       fqual = CpuOnly; body = [] };
+     { typ = Void; fname = "printc"; formals = [In, (byte1, "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "set_active_window"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
@@ -358,6 +361,8 @@ let check program =
 	IntLit(l) -> (Vec(Int, 1), SIntLit(l))
       | FloatLit(l) -> (Vec(Float, 1), SFloatLit(l))
       | BoolLit(l) -> (Vec(Bool, 1), SBoolLit(l))
+      | CharLit(c) -> (Vec(Byte, 1), SCharLit(c))
+      | StringLit(s) -> (Array(Vec(Byte, 1), String.length s), SStringLit(s))
       | Id _ | StructDeref(_, _) | ArrayDeref(_, _) as e -> lvalue false env e
       | Binop(e1, op, e2) as e -> let e1 = expr env e1 and e2 = expr env e2 in
         let t1 = fst e1 and t2 = fst e2 in

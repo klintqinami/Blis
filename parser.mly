@@ -12,12 +12,14 @@ open Ast
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token INT BOOL VOID STRUCT PIPELINE BUFFER WINDOW
+%token INT BOOL BYTE VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
 %token IN OUT INOUT
 %token <int> FLOAT
 %token <int> INT_LITERAL
 %token <float> FLOAT_LITERAL
+%token <char> CHAR_LITERAL
+%token <string> STRING_LITERAL
 %token <string> ID
 %token EOF
 
@@ -118,6 +120,7 @@ no_array_typ:
     INT { Vec(Int, 1) }
   | FLOAT { Vec(Float, $1) }
   | BOOL { Vec(Bool, 1) }
+  | BYTE { Vec(Byte, 1) }
   | STRUCT ID { Struct($2) }
   | PIPELINE ID { Pipeline($2) }
   | BUFFER LT typ GT { Buffer($3) }
@@ -158,6 +161,8 @@ expr:
   | FLOAT_LITERAL    { FloatLit($1) }
   | TRUE             { BoolLit(true) }
   | FALSE            { BoolLit(false) }
+  | CHAR_LITERAL     { CharLit($1) }
+  | STRING_LITERAL   { StringLit($1) }
   | ID               { Id($1) }
   | expr DOT    ID   { StructDeref($1, $3) }
   | expr LBRACKET expr RBRACKET { ArrayDeref($1, $3) }

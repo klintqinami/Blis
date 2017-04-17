@@ -59,6 +59,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let vec_t = make_vec_t f32_t in
   let ivec_t = make_vec_t i32_t in
   let bvec_t = make_vec_t i1_t in
+  let byte_vec_t = make_vec_t i8_t in
 
   (* define base pipeline type that every pipeline derives from
    * this is struct pipeline in runtime.c *)
@@ -86,6 +87,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
     | A.Vec(A.Float, w) -> vec_t.(w-1)
     | A.Vec(A.Int, w) -> ivec_t.(w-1)
     | A.Vec(A.Bool, w) -> bvec_t.(w-1)
+    | A.Vec(A.Byte, w) -> byte_vec_t.(w-1)
     | A.Struct s -> StringMap.find s struct_types
     | A.Array(t, s) -> L.array_type (ltype_of_typ t) s
     | A.Window -> voidp_t
@@ -185,6 +187,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
 
     let int_format_str = L.build_global_stringptr "%d\n" "fmt" builder in
     let float_format_str = L.build_global_stringptr "%f\n" "fmt" builder in
+    let char_format_str = L.build_global_stringptr "%c\n" "fmt" builder in
     
     let add_formal m (q, (t, n)) p = L.set_value_name n p;
       let local = L.build_alloca (ltype_of_typ t) n builder in
@@ -270,6 +273,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
 	SA.SIntLit i -> L.const_int i32_t i
       | SA.SFloatLit f -> L.const_float f32_t f
       | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
+      | SA.SCharLit c -> L.const_int i8_t (Char.code c)
+      | SA.SStringLit s -> L.const_string context s
       | SA.SNoexpr -> L.const_int i32_t 0
       | SA.SStructDeref((A.Pipeline(p), _) as e, m) ->
           let pdecl = StringMap.find p pipeline_decls in
@@ -323,6 +328,9 @@ let translate ((structs, pipelines, globals, functions) as program) =
             [| float_format_str ;
                L.build_fpext (expr builder e) f64_t "tmp" builder |]
 	    "printf" builder
+      | SA.SCall ("printc", [e]) ->
+          L.build_call printf_func [| char_format_str; (expr builder e) |]
+            "printf" builder
       | SA.SCall ("set_active_window", [w]) ->
           L.build_call set_active_window_func [| expr builder w |] "" builder
       | SA.SCall ("upload_buffer", [buf; data]) ->

@@ -47,6 +47,7 @@ rule token = parse
     raise (Failure("vecN with N not between 2 and 4"))
   else
     FLOAT(width) }
+| "u8"     { BYTE }
 | "bool"   { BOOL }
 | "window" { WINDOW }
 | "buffer" { BUFFER }
@@ -66,8 +67,41 @@ rule token = parse
 | "@vertex"   { VERTEX }
 | "@fragment" { FRAGMENT }
 | ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
+| "'" ([^ '\'' '\\'] as c) "'" { CHAR_LITERAL(c) }
+| "'\\n'" { CHAR_LITERAL('\n') }
+| "'\\t'" { CHAR_LITERAL('\t') }
+| "'\\''" { CHAR_LITERAL('\'') }
+| "'\\\"'" { CHAR_LITERAL('"') }
+| "\\\\" { CHAR_LITERAL('\\') }
+| "'\\" (digits as d) "'" {
+  let value = int_of_string d in
+  if value > 255 then
+    raise (Failure "character escape must be 0-255")
+  else
+    CHAR_LITERAL(Char.chr value)
+}
+| '"' { STRING_LITERAL(str "" lexbuf) }
 | eof { EOF }
 | _ as char { raise (Failure("illegal character " ^ Char.escaped char)) }
+
+and str old_str = parse
+[^ '\n' '"' '\\']+ as c { str (old_str ^ c) lexbuf }
+| "\\n" { str (old_str ^ "\n") lexbuf }
+| "\\t" { str (old_str ^ "\t") lexbuf }
+| "\\\"" { str (old_str ^ "\"") lexbuf }
+| "\\'" { str (old_str ^ "\'") lexbuf }
+| "\\" (digits as d) {
+  let value = int_of_string d in
+  if value > 255 then
+    raise (Failure "character escape must be 0-255")
+  else
+    str (old_str ^ String.make 1 (Char.chr value)) lexbuf
+}
+| "\\\\" { str (old_str ^ "\\" ) lexbuf }
+| "\\\n" { str (old_str ^ "\n") lexbuf }
+| '"' { old_str }
+| _ as char { raise (Failure("illegal character " ^ Char.escaped char ^
+  " in string literal")) }
 
 and comment = parse
   "*/" { token lexbuf }

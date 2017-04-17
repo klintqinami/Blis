@@ -14,6 +14,8 @@ type sexpr_detail =
     SIntLit of int
   | SFloatLit of float
   | SBoolLit of bool
+  | SCharLit of char
+  | SStringLit of string
   | SId of string
   | SStructDeref of sexpr * string
   | SArrayDeref of sexpr * sexpr
@@ -74,7 +76,8 @@ let fold_sfdecl_pre f a sfdecl =
           fold_expr_pre a e2
       | STypeCons(elist) -> fold_exprs_pre a elist
       | SCall(_, elist) -> fold_exprs_pre a elist
-      | SIntLit(_) | SFloatLit(_) | SBoolLit(_) | SId(_) | SNoexpr ->
+      | SIntLit(_) | SFloatLit(_) | SBoolLit(_) | SCharLit(_) | SStringLit(_)
+      | SId(_) | SNoexpr ->
           a
   and fold_exprs_pre a elist = List.fold_left fold_expr_pre a elist
   in
@@ -130,6 +133,8 @@ let rec string_of_sexpr (s : sexpr) = match snd s with
   | SFloatLit(l) -> string_of_float l
   | SBoolLit(true) -> "true"
   | SBoolLit(false) -> "false"
+  | SCharLit(c) -> "'" ^ Char.escaped c ^ "'"
+  | SStringLit(s) -> "\"" ^ String.escaped s ^ "\""
   | SId(s) -> s
   | SStructDeref(e, m) -> string_of_sexpr e ^ "." ^ m
   | SArrayDeref(e, i) -> string_of_sexpr e ^ "[" ^ string_of_sexpr i ^ "]"

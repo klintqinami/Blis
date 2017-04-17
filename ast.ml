@@ -5,7 +5,7 @@ type op = Add | Sub | Mult | Div | Equal | Neq | Less | Leq | Greater | Geq |
 
 type uop = Neg | Not
 
-type base_type = Float | Int | Bool
+type base_type = Float | Int | Byte | Bool
 
 type typ =
     Vec of base_type * int
@@ -22,6 +22,8 @@ type expr =
     IntLit of int
   | FloatLit of float
   | BoolLit of bool
+  | CharLit of char
+  | StringLit of string
   | Id of string
   | StructDeref of expr * string
   | ArrayDeref of expr * expr
@@ -109,9 +111,11 @@ let rec string_of_typ = function
     Vec(Bool, 1) -> "bool"
   | Vec(Int, 1) -> "int"
   | Vec(Float, 1) -> "float"
+  | Vec(Byte, 1) -> "u8"
   | Vec(Bool, w) -> "bvec" ^ string_of_int w
   | Vec(Int, w) -> "ivec" ^ string_of_int w
   | Vec(Float, w) -> "vec" ^ string_of_int w
+  | Vec(Byte, w) -> "u8vec" ^ string_of_int w
   | Struct s -> "struct " ^ s
   | Pipeline p -> "pipeline " ^ p
   | Buffer t -> "buffer" ^ "<" ^ string_of_typ t ^ ">"
@@ -124,6 +128,8 @@ let rec string_of_expr = function
   | FloatLit(l) -> string_of_float l
   | BoolLit(true) -> "true"
   | BoolLit(false) -> "false"
+  | CharLit(c) -> "'" ^ Char.escaped c ^ "'"
+  | StringLit(s) -> "\"" ^ String.escaped s ^ "\""
   | Id(s) -> s
   | StructDeref(e, m) -> string_of_expr e ^ "." ^ m
   | ArrayDeref(e, i) -> string_of_expr e ^ "[" ^ string_of_expr i ^ "]"

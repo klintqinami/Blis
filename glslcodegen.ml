@@ -132,10 +132,10 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
    * for example, returns "vec4" for vec4[10][2]
    *)
   let rec string_of_base_typ = function
-      A.Vec(A.Int, 1) -> "int"
+      A.Vec(A.Int, 1) | A.Vec(A.Byte, 1) -> "int"
     | A.Vec(A.Float, 1) -> "float"
     | A.Vec(A.Bool, 1) -> "bool"
-    | A.Vec(A.Int, n) -> "ivec" ^ string_of_int n
+    | A.Vec(A.Int, n) | A.Vec(A.Byte, n) -> "ivec" ^ string_of_int n
     | A.Vec(A.Float, n) -> "vec" ^ string_of_int n
     | A.Vec(A.Bool, n) -> "bvec" ^ string_of_int n
     | A.Struct(name) -> StringMap.find name struct_table.scope
@@ -188,11 +188,24 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       "\n};") structs) ^ "\n\n"
   in
 
+  (* from http://stackoverflow.com/questions/10068713/string-to-list-of-char *)
+  let explode s =
+    let rec exp i l =
+      if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+    exp (String.length s - 1) []
+  in
+
   let rec translate_stmts env slist =
     let rec expr env stmts (typ, e) = match e with
         SA.SIntLit(i) -> (env, stmts, string_of_int i)
       | SA.SFloatLit(f) -> (env, stmts, string_of_float f)
       | SA.SBoolLit(b) -> (env, stmts, if b then "true" else "false")
+      | SA.SCharLit(c) -> (env, stmts, string_of_int (Char.code c))
+      | SA.SStringLit(s) -> (env, stmts,
+          "int[" ^ string_of_int (String.length s) ^ "](" ^
+            String.concat ", "
+              (List.map (fun c -> string_of_int (Char.code c)) (explode s)) ^
+            ")")
       | SA.SId(n) -> (env, stmts, StringMap.find n env.table.scope)
       | SA.SStructDeref(e, mem) -> let env, stmts, e' = expr env stmts e in
           (match fst e with
