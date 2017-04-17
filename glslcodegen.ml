@@ -21,6 +21,7 @@ let empty_table = {
 type translation_environment = {
   table : symbol_table;
   cur_qualifier : A.func_qualifier;
+  forloop_update_statement : string;
 }
 
 (* return a fresh name given a set of already-used names. The original name is
@@ -106,6 +107,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
   let env = {
     table = empty_table;
     cur_qualifier = A.Both;
+    forloop_update_statement = "";
   }
   in
 
@@ -273,21 +275,24 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
               else_string ^
            "}\n")
       | SA.SFor(e1, e2, e3, body) ->
-          let env, stmts, e1' = expr env stmts e1 in
-          let env, stmts, e2' = expr env stmts e2 in
-          let env, stmts, e3' = expr env stmts e3 in
-          let body_string = translate_stmts env body in
+          let env, stmts, _ = expr env stmts e1 in
+          let env, stmts2, e2' = expr env "" e2 in
+          let env, stmts3, _ = expr env "" e3 in
+          let env' = {env with forloop_update_statement = stmts3 } in
+          let body_string = translate_stmts env' body in
           (env, stmts ^
-           "for (" ^ e1' ^ "; " ^ e2' ^ "; " ^ e3' ^ ") {\n" ^
-              body_string ^
+           "while ( true ) {\n" ^ stmts2 ^ "\nif(!(" ^ e2' ^ ")){break;}\n" ^
+              body_string ^ stmts3 ^
            "}\n")
       | SA.SWhile(cond, body) ->
-          let env, stmts, cond' = expr env stmts cond in
+          let env, stmts', cond' = expr env "" cond in
           let body_string = translate_stmts env body in
           (env, stmts ^
-           "while (" ^ cond' ^ ") {\n" ^ body_string ^ "}\n")
+           "while ( true ) {\n" ^ stmts' ^ "\nif(!(" ^ cond' ^ ")){break;}\n" ^
+               body_string ^
+           "}\n")
       | SA.SBreak -> (env, stmts ^ "break;\n")
-      | SA.SContinue -> (env, stmts ^ "continue;\n")
+      | SA.SContinue -> (env, stmts ^ env.forloop_update_statement ^ "continue;\n")
     in
 
     snd (List.fold_left stmt (env, "") slist)
