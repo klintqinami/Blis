@@ -1,10 +1,17 @@
-Decide meeting times
-  Klint prefers Saturdays or Sundays
+Features:
+- uniforms
+- variable-length arrays
+- implicit conversions
+- support for vector ops/matrices
+- support for equality
+- basic I/O (suck in a file)
 
-Decide project roles
-  Manager - Wendy?
-  Language Guru - Connor? 
-  System Architect - Connor?
-  Tester - Klint?
-  
-Project Proposal
+Broken things:
+- Check that types match for varying linking, more thoroughly test it
+- Inhibit access to global variables from gpu functions
+- Add support for inout parameters to entrypoints, or disallow them
+
+Wishlist:
+- multi-dimensional arrays
+- images, textures, framebuffers
+
