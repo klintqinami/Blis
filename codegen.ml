@@ -61,6 +61,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let bvec_t = make_vec_t i1_t in
   let byte_vec_t = make_vec_t i8_t in
 
+  let izero = L.const_int i32_t 0 in
+
   (* define base pipeline type that every pipeline derives from
    * this is struct pipeline in runtime.c *)
   let pipeline_t = L.struct_type context [|
@@ -152,6 +154,35 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let pipeline_get_vertex_buffer_func =
     L.declare_function "pipeline_get_vertex_buffer"
       pipeline_get_vertex_buffer_t the_module in
+  let pipeline_get_uniform_location_t =
+    L.function_type i32_t [| L.pointer_type pipeline_t; string_t |] in
+  let pipeline_get_uniform_location_func =
+    L.declare_function "pipeline_get_uniform_location"
+      pipeline_get_uniform_location_t the_module in
+  let pipeline_set_uniform_float_t =
+    L.function_type void_t
+      [| L.pointer_type pipeline_t; i32_t; L.pointer_type f32_t; i32_t; i32_t |] in
+  let pipeline_set_uniform_float_func =
+    L.declare_function "pipeline_set_uniform_float"
+      pipeline_set_uniform_float_t the_module in
+  let pipeline_set_uniform_int_t =
+    L.function_type void_t
+      [| L.pointer_type pipeline_t; i32_t; L.pointer_type i32_t; i32_t; i32_t |] in
+  let pipeline_set_uniform_int_func =
+    L.declare_function "pipeline_set_uniform_int"
+      pipeline_set_uniform_int_t the_module in
+  let pipeline_get_uniform_float_t =
+    L.function_type void_t
+      [| L.pointer_type pipeline_t; i32_t; L.pointer_type f32_t |] in
+  let pipeline_get_uniform_float_func =
+    L.declare_function "pipeline_get_uniform_float"
+      pipeline_get_uniform_float_t the_module in
+  let pipeline_get_uniform_int_t =
+    L.function_type void_t
+      [| L.pointer_type pipeline_t; i32_t; L.pointer_type i32_t |] in
+  let pipeline_get_uniform_int_func =
+    L.declare_function "pipeline_get_uniform_int"
+      pipeline_get_uniform_int_t the_module in
   let bind_pipeline_t = L.function_type void_t [| L.pointer_type pipeline_t |] in
   let bind_pipeline_func =
     L.declare_function "bind_pipeline" bind_pipeline_t the_module in
@@ -207,7 +238,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
           A.In -> ignore (L.build_store p local builder)
         | A.Inout -> ignore (L.build_store
             (L.build_load p "tmp" builder) local builder)
-        | A.Out -> ());
+        | A.Out -> ()
+        | A.Uniform -> raise (Failure "unreachable"));
       StringMap.add n local m in
 
     let formals = List.fold_left2 add_formal StringMap.empty fdecl.SA.sformals
@@ -242,7 +274,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
                   (index_of m (List.map snd decl.A.members))
                   "tmp" builder
             | A.Mat (_, _, 1) ->
-                L.build_gep e' [|L.const_int i32_t 0; L.const_int i32_t (match m with
+                L.build_gep e' [|izero; L.const_int i32_t (match m with
                     "x" -> 0
                   | "y" -> 1
                   | "z" -> 2
@@ -254,7 +286,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
           let e' = lvalue builder e in
           let i' = expr builder i in
           (match (fst e) with
-            A.Array(_, Some _) -> L.build_gep e' [| L.const_int i32_t 0; i' |]
+            A.Array(_, Some _) -> L.build_gep e' [| izero; i' |]
               "tmp" builder
           | A.Array(_, None) -> L.build_gep
             (L.build_extractvalue (L.build_load e' "" builder) 1 "" builder)
@@ -275,6 +307,20 @@ let translate ((structs, pipelines, globals, functions) as program) =
             ignore (L.build_call pipeline_bind_vertex_buffer_func [|
               lval'; e'; L.const_int i32_t comp; L.const_int i32_t location |]
               "" builder)
+        | (A.Mat(b, n, c), SA.SStructDeref((A.Pipeline(_), _) as e, m)) ->
+            let lval' = lvalue builder e in
+            let e' = lvalue builder r in
+            let loc = L.build_call pipeline_get_uniform_location_func [|
+              lval'; L.build_global_stringptr m "" builder |] "" builder in
+            ignore (match b with
+                A.Float -> L.build_call pipeline_set_uniform_float_func [|
+                  lval'; loc; L.build_gep e' [| izero; izero |] "" builder;
+                  L.const_int i32_t n; L.const_int i32_t c |] "" builder
+              | A.Int -> L.build_call pipeline_set_uniform_int_func [|
+                  lval'; loc; L.build_gep e' [| izero; izero |] "" builder;
+                  L.const_int i32_t n; L.const_int i32_t c |] "" builder
+              | A.Bool -> raise (Failure "unimplemented boolean uniforms")
+              | _ -> raise (Failure "unimplemented"));
         | _ -> let lval' = lvalue builder l in
             let e' = expr builder r in
             ignore (L.build_store e' lval' builder)
@@ -286,13 +332,33 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
       | SA.SCharLit c -> L.const_int i8_t (Char.code c)
       | SA.SStringLit s -> L.const_string context s
-      | SA.SNoexpr -> L.const_int i32_t 0
+      | SA.SNoexpr -> izero
       | SA.SStructDeref((A.Pipeline(p), _) as e, m) ->
           let pdecl = StringMap.find p pipeline_decls in
-          let location = index_of m (List.map snd pdecl.SA.sinputs) in
           let e' = lvalue builder e in
-          L.build_call pipeline_get_vertex_buffer_func [|
-            e'; L.const_int i32_t location |] "" builder
+          (try
+            let location = index_of m (List.map snd pdecl.SA.sinputs) in
+            L.build_call pipeline_get_vertex_buffer_func [|
+              e'; L.const_int i32_t location |] "" builder
+          with Not_found ->
+            let loc = L.build_call pipeline_get_uniform_location_func [|
+              e'; L.build_global_stringptr m "" builder |] "" builder in
+            let tmp = L.build_alloca (ltype_of_typ (fst sexpr)) "" builder in
+            ignore (match fst sexpr with
+                A.Mat(A.Float, _, _) ->
+                  L.build_call pipeline_get_uniform_float_func [|
+                    e'; loc;
+                    L.build_gep tmp [| izero; izero |] "" builder |]
+                  "" builder
+              | A.Mat(A.Int, _, _) ->
+                  L.build_call pipeline_get_uniform_int_func [|
+                    e'; loc;
+                    L.build_gep tmp [| izero; izero |] "" builder |]
+                  "" builder
+              | A.Mat(A.Bool, _, _) ->
+                  raise (Failure "unimplemented boolean uniforms")
+              | _ -> raise (Failure "unimplemented"));
+            L.build_load tmp "" builder)
       | SA.SId _ | SA.SStructDeref (_, _) | SA.SArrayDeref (_, _) ->
           L.build_load (lvalue builder sexpr) "load_tmp" builder
       | SA.SBinop (e1, op, e2) ->
@@ -348,10 +414,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 let fshader = StringMap.find pdecl.SA.sfshader shader_globals in
                 let vshader = StringMap.find pdecl.SA.svshader shader_globals in
                 let tmp = L.build_alloca pipeline_t "pipeline_tmp" builder in
-                let v = L.build_gep vshader [|
-                  L.const_int i32_t 0; L.const_int i32_t 0 |] "" builder in
-                let f = L.build_gep fshader [|
-                  L.const_int i32_t 0; L.const_int i32_t 0 |] "" builder in
+                let v = L.build_gep vshader [| izero; izero |] "" builder in
+                let f = L.build_gep fshader [| izero; izero |] "" builder in
                 ignore
                   (L.build_call create_pipeline_func [| tmp; v; f |] "" builder);
                 L.build_load tmp "" builder
@@ -449,8 +513,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
           let ret = lvalue builder ret in
           let llret = L.build_icmp L.Icmp.Ne
             (L.build_call should_close_func [| w' |]  "" builder)
-            (L.const_int i32_t 0) "" builder in
-          ignore (L.build_store ret llret builder); builder
+            izero "" builder in
+          ignore (L.build_store llret ret builder); builder
       | SA.SCall (ret, "read_pixel", [x; y]) ->
           let x' = expr builder x in
           let y' = expr builder y in

@@ -299,7 +299,8 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       let formal = (match qual with
           A.In -> ""
         | A.Out -> "out "
-        | A.Inout -> "inout ") ^ bind'
+        | A.Inout -> "inout "
+        | A.Uniform -> raise (Failure "unreachable")) ^ bind'
       in
       (env, if formals = "" then formal else formals ^ ", " ^ formal))
     (env, "") fdecl.SA.sformals
@@ -334,6 +335,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       (match qual with
           A.In -> "in "
         | A.Out -> "out "
+        | A.Uniform -> "uniform "
         | A.Inout ->
             raise (Failure ("inout on entrypoints not supported yet"))) ^
       bind' ^ ";\n"

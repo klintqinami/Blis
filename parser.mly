@@ -14,7 +14,7 @@ open Ast
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
 %token BOOL BYTE VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
-%token IN OUT INOUT
+%token IN OUT INOUT UNIFORM
 %token <int> FLOAT
 %token <int> INT
 %token <int> INT_LITERAL
@@ -111,7 +111,8 @@ formal_list:
 formal_qualifier:
     /* nothing */ { In }
   | OUT { Out }
-  | INOUT {Inout}
+  | INOUT { Inout }
+  | UNIFORM { Uniform }
   
 arrays:
     /* nothing */ { [] }
