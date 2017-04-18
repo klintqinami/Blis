@@ -1,10 +1,12 @@
 Features:
-- uniforms
-- variable-length arrays
-- implicit conversions
-- support for vector ops/matrices
-- support for equality
-- basic I/O (suck in a file)
+- uniforms (Connor)
+- variable-length arrays (Wendy)
+  - basic I/O (suck in a file) (Connor)
+  - routine to parse OBJ files (Jason)
+- add GLFW functions to read mouse position/click state
+- implicit conversions (Connor & Wendy)
+- support for vector ops/matrices (Klint)
+- support for equality (Klint?)
 
 Broken things:
 - Check that types match for varying linking, more thoroughly test it
