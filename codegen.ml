@@ -374,6 +374,12 @@ let translate ((structs, pipelines, globals, functions) as program) =
           let builder, y' = expr builder y in
           ignore (L.build_call read_pixel_func [| x'; y'; tmp |] "" builder);
           builder, L.build_load tmp "" builder
+      | SA.SCall ("length", [arr]) ->
+          let builder, arr' = expr builder arr in
+          builder, (match fst arr with
+              A.Array(_, Some len) -> L.const_int i32_t len
+            | A.Array(_, None) -> L.build_extractvalue arr' 0 "" builder
+            | _ -> raise (Failure "unexpected type"))
       | SA.SCall (f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in
          let builder, actuals = List.fold_left2

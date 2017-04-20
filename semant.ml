@@ -415,6 +415,13 @@ let check program =
         (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
 				      " = " ^ string_of_typ rt ^ " in " ^ 
 				      string_of_expr ex)), SAssign(lval, e))
+      | Call("length", [arr]) as call ->
+          let arr = expr env arr in
+          (match fst arr with
+              Array(_, _) -> (Vec(Int, 1), SCall("length", [arr]))
+            | _ as typ ->
+                raise (Failure ("expecting an array type instead of " ^
+                  string_of_typ typ ^ " in " ^ string_of_expr call)))
       | Call("upload_buffer", [buf; data]) as call ->
           check_call_qualifiers env "upload_buffer" CpuOnly;
           let buf = expr env buf and data = expr env data in
