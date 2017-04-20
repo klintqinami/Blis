@@ -263,10 +263,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
             let e' = expr builder r in
             ignore (L.build_call pipeline_bind_vertex_buffer_func [|
               lval'; e'; L.const_int i32_t comp; L.const_int i32_t location |]
-              "" builder); e'
+              "" builder)
         | _ -> let lval' = lvalue builder l in
             let e' = expr builder r in
-            ignore (L.build_store e' lval' builder); e'
+            ignore (L.build_store e' lval' builder)
 
     (* Construct code for an expression; return its value *)
     and expr builder sexpr = match snd sexpr with
@@ -319,69 +319,6 @@ let translate ((structs, pipelines, globals, functions) as program) =
 	    SA.INeg     -> L.build_neg
 	  | SA.FNeg     -> L.build_fneg
           | SA.BNot     -> L.build_not) e' "tmp" builder
-      | SA.SAssign (lval, e) -> handle_assign builder lval e
-      | SA.SCall ("print", [e]) | SA.SCall ("printb", [e]) ->
-	  L.build_call printf_func [| int_format_str ; (expr builder e) |]
-	    "printf" builder
-      | SA.SCall ("printf", [e]) ->
-	  L.build_call printf_func
-            [| float_format_str ;
-               L.build_fpext (expr builder e) f64_t "tmp" builder |]
-	    "printf" builder
-      | SA.SCall ("printc", [e]) ->
-          L.build_call printf_func [| char_format_str; (expr builder e) |]
-            "printf" builder
-      | SA.SCall ("set_active_window", [w]) ->
-          L.build_call set_active_window_func [| expr builder w |] "" builder
-      | SA.SCall ("upload_buffer", [buf; data]) ->
-          let buf' = expr builder buf in
-          let data', size = (match (fst data) with
-            A.Array(A.Vec(A.Float, s), Some n) ->
-              (lvalue builder data, L.const_int i32_t (4 * s * n))
-          | A.Array(A.Vec(A.Float, n), None) -> let s = expr builder data in
-              (L.build_extractvalue s 1 "" builder,
-              L.build_mul (L.const_int i32_t (4 * n))
-              (L.build_extractvalue s 0 "" builder) "" builder)
-          | _ -> raise (Failure "not supported")) in
-          let data' = L.build_bitcast data' voidp_t "" builder in
-          L.build_call upload_buffer_func
-            [| buf'; data'; size; L.const_int i32_t 0x88E4 (* GL_STATIC_DRAW *) |] "" builder
-      | SA.SCall ("bind_pipeline", [p]) ->
-          let p' = lvalue builder p in
-          L.build_call bind_pipeline_func [| p' |] "" builder
-      | SA.SCall ("draw_arrays", [i]) ->
-          let i' = expr builder i in
-          L.build_call draw_arrays_func [| i' |] "" builder
-      | SA.SCall ("swap_buffers", [w]) ->
-          let w' = expr builder w in
-          L.build_call swap_buffers_func [| w' |] "" builder
-      | SA.SCall ("poll_events", []) ->
-          L.build_call poll_events_func [| |] "" builder
-      | SA.SCall ("window_should_close", [w]) ->
-          let w' = expr builder w in
-          L.build_icmp L.Icmp.Ne
-            (L.build_call should_close_func [| w' |]  "" builder)
-            (L.const_int i32_t 0) "" builder
-      | SA.SCall ("read_pixel", [x; y]) ->
-          let tmp = L.build_alloca vec_t.(3) "" builder in
-          let x' = expr builder x in
-          let y' = expr builder y in
-          ignore (L.build_call read_pixel_func [| x'; y'; tmp |] "" builder);
-          L.build_load tmp "" builder
-      | SA.SCall ("length", [arr]) ->
-          let arr' = expr builder arr in
-          (match fst arr with
-              A.Array(_, Some len) -> L.const_int i32_t len
-            | A.Array(_, None) -> L.build_extractvalue arr' 0 "" builder
-            | _ -> raise (Failure "unexpected type"))
-      | SA.SCall (f, act) ->
-         let (fdef, fdecl) = StringMap.find f function_decls in
-	 let actuals = (List.map2 (fun (q, (_, _)) e ->
-           if q = A.In then expr builder e
-           else lvalue builder e) fdecl.SA.sformals act) in
-	 let result = (match fdecl.SA.styp with A.Void -> ""
-                                            | _ -> f ^ "_result") in
-         L.build_call fdef (Array.of_list actuals) result builder
       | SA.STypeCons act ->
           match fst sexpr with
               A.Vec(_, _) | A.Array(_, Some _) ->
@@ -440,7 +377,93 @@ let translate ((structs, pipelines, globals, functions) as program) =
     (* Build the code for the given statement; return the builder for
        the statement's successor *)
     and stmt break_bb continue_bb builder = function
-      | SA.SExpr e -> ignore (expr builder e); builder
+        SA.SAssign (lval, e) -> handle_assign builder lval e; builder
+      | SA.SCall (_, "print", [e]) | SA.SCall (_, "printb", [e]) ->
+	  ignore
+            (L.build_call printf_func [| int_format_str ; (expr builder e) |]
+            "printf" builder);
+          builder
+      | SA.SCall (_, "printf", [e]) ->
+	  ignore
+            (L.build_call printf_func
+              [| float_format_str ;
+                 L.build_fpext (expr builder e) f64_t "tmp" builder |]
+              "printf" builder);
+          builder
+      | SA.SCall (_, "printc", [e]) ->
+          ignore
+            (L.build_call printf_func [| char_format_str; (expr builder e) |]
+              "printf" builder);
+          builder
+      | SA.SCall (_, "set_active_window", [w]) ->
+          ignore (L.build_call set_active_window_func [| expr builder w |] ""
+            builder);
+          builder
+      | SA.SCall (_, "upload_buffer", [buf; data]) ->
+          let buf' = expr builder buf in
+          let data', size = (match (fst data) with
+            A.Array(A.Vec(A.Float, s), Some n) ->
+              (lvalue builder data, L.const_int i32_t (4 * s * n))
+          | A.Array(A.Vec(A.Float, n), None) -> let s = expr builder data in
+              (L.build_extractvalue s 1 "" builder,
+              L.build_mul (L.const_int i32_t (4 * n))
+              (L.build_extractvalue s 0 "" builder) "" builder)
+          | _ -> raise (Failure "not supported")) in
+          let data' = L.build_bitcast data' voidp_t "" builder in
+          ignore (L.build_call upload_buffer_func
+            [| buf'; data'; size;
+               L.const_int i32_t 0x88E4 (* GL_STATIC_DRAW *) |] "" builder);
+          builder
+      | SA.SCall (_, "bind_pipeline", [p]) ->
+          let p' = lvalue builder p in
+          ignore (L.build_call bind_pipeline_func [| p' |] "" builder);
+          builder
+      | SA.SCall (_, "draw_arrays", [i]) ->
+          let i' = expr builder i in
+          ignore (L.build_call draw_arrays_func [| i' |] "" builder);
+          builder
+      | SA.SCall (_, "swap_buffers", [w]) ->
+          let w' = expr builder w in
+          ignore (L.build_call swap_buffers_func [| w' |] "" builder);
+          builder
+      | SA.SCall (_, "poll_events", []) ->
+          ignore (L.build_call poll_events_func [| |] "" builder);
+          builder
+      | SA.SCall (ret, "window_should_close", [w]) ->
+          let w' = expr builder w in
+          let ret = lvalue builder ret in
+          let llret = L.build_icmp L.Icmp.Ne
+            (L.build_call should_close_func [| w' |]  "" builder)
+            (L.const_int i32_t 0) "" builder in
+          ignore (L.build_store ret llret builder); builder
+      | SA.SCall (ret, "read_pixel", [x; y]) ->
+          let x' = expr builder x in
+          let y' = expr builder y in
+          let ret = lvalue builder ret in
+          ignore (L.build_call read_pixel_func [| x'; y'; ret |] "" builder);
+          builder
+      | SA.SCall (ret, "length", [arr]) ->
+          let arr' = expr builder arr in
+          let ret = lvalue builder ret in
+          let len = (match fst arr with
+              A.Array(_, Some len) -> L.const_int i32_t len
+            | A.Array(_, None) -> L.build_extractvalue arr' 0 "" builder
+            | _ -> raise (Failure "unexpected type")) in
+          ignore (L.build_store len ret builder); builder
+      | SA.SCall (ret, f, act) ->
+         let (fdef, fdecl) = StringMap.find f function_decls in
+	 let actuals = (List.map2 (fun (q, (_, _)) e ->
+           if q = A.In then expr builder e
+           else lvalue builder e) fdecl.SA.sformals act) in
+	 let result = (match fdecl.SA.styp with A.Void -> ""
+                                            | _ -> f ^ "_result") in
+
+         let llret = L.build_call fdef (Array.of_list actuals) result builder in
+         (match ret with
+            (A.Void, SA.SNoexpr) -> ()
+          | _ -> let ret = lvalue builder ret in
+              ignore (L.build_store llret ret builder)
+          ); builder
       | SA.SReturn e -> copy_out_params builder;
           ignore (match fdecl.SA.styp with
 	  A.Void -> L.build_ret_void builder

@@ -165,11 +165,6 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     (env, string_of_base_typ typ ^ " " ^ new_name ^ string_of_array typ)
   in
 
-  let make_tmp env typ =
-    let env, tmp = add_variable_name env "" in
-    (env, string_of_base_typ typ ^ " " ^ tmp ^ string_of_array typ, tmp)
-  in
-
   let struct_members = List.fold_left (fun map sdecl ->
     let table = List.fold_left (fun table (_, name) ->
       fst (add_symbol_table table name)) empty_table sdecl.A.members
@@ -241,10 +236,6 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           (env, stmts, (match op with
               SA.INeg | SA.FNeg -> "-"
             | SA.BNot -> "!") ^ "(" ^ e' ^ ")")
-      | SA.SAssign(l, r) ->
-          let env, stmts, l' = expr env stmts l in
-          let env, stmts, r' = expr env stmts r in
-          (env, stmts ^ "(" ^ l' ^ ") = (" ^ r' ^ ");\n", l')
       | SA.STypeCons(elist) -> (match typ with
           A.Vec(_, _) | A.Array(_, _) ->
             let env, stmts, elist' = expr_list env stmts elist
@@ -252,15 +243,6 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
             (env, stmts, string_of_typ typ ^ "(" ^ elist' ^ ")")
         | _ -> raise (Failure ("unexpected type constructor for " ^
                 string_of_typ typ)))
-      | SA.SCall(name, elist) ->
-          let env, stmts, elist' = expr_list env stmts elist
-          in
-          (* since calls can have side-effects, make a separate statement *)
-          let env, bind, tmp = make_tmp env typ
-          in
-          (env, stmts ^
-           bind ^ " = " ^ StringMap.find name func_table.scope ^ "(" ^ elist' ^ ");\n",
-           tmp)
       | SA.SNoexpr -> (env, stmts, "")
 
     and expr_list env stmts elist =
@@ -272,8 +254,23 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
     in
         
     let stmt (env, stmts) = function
-        SA.SExpr(e) -> let env, stmts, _ = expr env stmts e in
-          (env, stmts)
+        SA.SAssign(l, r) ->
+          let env, stmts, l' = expr env stmts l in
+          let env, stmts, r' = expr env stmts r in
+          (env, stmts ^ "(" ^ l' ^ ") = (" ^ r' ^ ");\n")
+      | SA.SCall((A.Void, SA.SNoexpr), name, elist) ->
+          let env, stmts, elist' = expr_list env stmts elist
+          in
+          (env, stmts ^
+           StringMap.find name func_table.scope ^ "(" ^ elist' ^ ");\n")
+      | SA.SCall(ret, name, elist) ->
+          let env, stmts, elist' = expr_list env stmts elist
+          in
+          let env, stmts, ret = expr env stmts ret
+          in
+          (env, stmts ^
+           ret ^ " = " ^ StringMap.find name func_table.scope ^ "(" ^ elist' ^
+           ");\n")
       | SA.SReturn(e) -> let env, stmts, e' = expr env stmts e in
           if env.cur_qualifier = A.Vertex then
             (env, stmts ^ "gl_Position = " ^ e' ^ ";\nreturn;\n")

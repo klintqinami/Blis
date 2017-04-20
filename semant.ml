@@ -44,33 +44,34 @@ let check program =
       raise (Failure ("undeclared identifier " ^ name))
   in
 
+  (* if the name already exists, add a number to it to make it unique *)
+  let find_unique_name env name =
+    if not (StringSet.mem name env.names) then
+      name
+    else
+      let rec find_unique_name' env name n = 
+        let unique_name = name ^ string_of_int n in
+        if not (StringSet.mem unique_name env.names) then
+          unique_name
+        else
+          find_unique_name' env name (n + 1)
+      in
+      find_unique_name' env name 1
+  in
+  (* return a fresh, never-used name, but don't actually add it to the symbol
+   * table. Useful for creating compiler temporaries.
+   *)
+  let add_private_name env =
+    let unique_name = find_unique_name env "_" in
+    ({ env with names = StringSet.add unique_name env.names }, unique_name)
+  in
   (* Adds/replaces symbol on the symbol table, returns the new unique name for
    * the symbol 
    *)
   let add_symbol_table env name typ =
-    (* if the name already exists, add a number to it to make it unique *)
-    let find_unique_name name =
-      if not (StringSet.mem name env.names) then
-        name
-      else
-        let rec find_unique_name' env name n = 
-          let unique_name = name ^ string_of_int n in
-          if not (StringSet.mem unique_name env.names) then
-            unique_name
-          else
-            find_unique_name' env name (n + 1)
-        in
-        find_unique_name' env name 1
-    in
-    let unique_name = find_unique_name name in
+    let unique_name = find_unique_name env name in
     ({ env with scope = StringMap.add name (typ, unique_name) env.scope;
        names = StringSet.add unique_name env.names; }, unique_name)
-  in
-
-  (* Raise an exception of the given rvalue type cannot be assigned to
-     the given lvalue type *)
-  let check_assign lvaluet rvaluet err =
-     if lvaluet = rvaluet then lvaluet else raise err
   in
 
   (**** Checking Structure and Pipeline Declarations ****)
@@ -311,6 +312,18 @@ let check program =
                   ^ func.fname)))
     in
 
+    let check_assign lval rval stmts fail =
+      let ltyp = fst lval and rtyp = fst rval in
+      if ltyp <> rtyp then
+        raise fail
+      else
+        SAssign(lval, rval) :: stmts in
+
+    (* create a new compiler temporary variable of the given type *)
+    let add_tmp env typ =
+      let env, name = add_private_name env in
+      ({ env with locals = (typ, name) :: env.locals }, (typ, SId(name))) in
+
     let rec lvalue need_lvalue env stmts = function
         Id s -> let t, s' = find_symbol_table env.scope s in env, stmts, (t, SId(s'))
       | StructDeref(e, m) as d ->
@@ -418,44 +431,46 @@ let check program =
       | Assign(lval, e) as ex ->
           let env, stmts, lval = lvalue true env stmts lval in
           let env, stmts, e = expr env stmts e in
-          let lt = fst lval in
-          let rt = fst e in
-        env, stmts, (check_assign lt rt
-          (Failure ("illegal assignment " ^ string_of_typ lt ^
-	    " = " ^ string_of_typ rt ^ " in " ^ string_of_expr ex)),
-        SAssign(lval, e))
+          env, check_assign lval e stmts
+            (Failure ("illegal assignment " ^ string_of_typ (fst lval) ^
+              " = " ^ string_of_typ (fst e) ^ " in " ^ string_of_expr ex)),
+          lval
       | Call("length", [arr]) as call ->
           let env, stmts, arr = expr env stmts arr in
-          env, stmts, (match fst arr with
-              Array(_, _) -> (Vec(Int, 1), SCall("length", [arr]))
+          let env, tmp = add_tmp env (Vec(Int, 1)) in
+          env, (match fst arr with
+              Array(_, _) -> SCall(tmp, "length", [arr])
             | _ as typ ->
                 raise (Failure ("expecting an array type instead of " ^
-                  string_of_typ typ ^ " in " ^ string_of_expr call)))
+                  string_of_typ typ ^ " in " ^ string_of_expr call))) :: stmts,
+          tmp
       | Call("upload_buffer", [buf; data]) as call ->
           check_call_qualifiers env "upload_buffer" CpuOnly;
           let env, stmts, buf = expr env stmts buf in
           let env, stmts, data = expr env stmts data in
-          env, stmts, (match fst buf with
+          env, (match fst buf with
               Buffer(t) ->
                 (match fst data with
                     Array(t', _) -> if t' = t then
-                      (Void, SCall("upload_buffer", [buf; data]))
+                      SCall((Void, SNoexpr), "upload_buffer", [buf; data])
                     else
                       raise (Failure ("buffer and array type do not match " ^
                         "in " ^ string_of_expr call))
                   | _ -> raise (Failure ("must upload an array in " ^
                     "upload_buffer in " ^ string_of_expr call)))
             | _ -> raise (Failure ("first parameter to upload_buffer must be " ^
-                    "a buffer in " ^ string_of_expr call)))
+                    "a buffer in " ^ string_of_expr call))) :: stmts,
+          (Void, SNoexpr)
       | Call("bind_pipeline", [p]) as call ->
           check_call_qualifiers env "bind_pipeline" CpuOnly;
           let env, stmts, p' = expr env stmts p in
-          env, stmts, (match fst p' with
+          env, (match fst p' with
               Pipeline(_) ->
-                (Void, SCall("bind_pipeline", [p']))
+                SCall((Void, SNoexpr), "bind_pipeline", [p'])
             | _ as t -> raise (Failure ("calling bind_pipeline with " ^
               string_of_typ t ^ " instead of pipeline in " ^ 
-              string_of_expr call)))
+              string_of_expr call))) :: stmts,
+          (Void, SNoexpr)
       | Call(fname, actuals) as call -> let fd = function_decl fname in
           check_call_qualifiers env fname fd.fqual;
           if List.length actuals != List.length fd.formals then
@@ -463,32 +478,76 @@ let check program =
               (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
           else
             let env, stmts, actuals = List.fold_left2
-              (fun (env, stmts, actuals) (fq, (ft, _)) e ->
+              (* translate/evaluate function arguments *)
+              (fun (env, stmts, actuals) (fq, _) e ->
                 let env, stmts, se = if fq = In then
                   expr env stmts e
                 else
                   lvalue true env stmts e in
-                let et = fst se in
-                ignore (check_assign ft et
+                env, stmts, ((fq, se) :: actuals)) (env, stmts, []) fd.formals actuals in
+            let actuals = List.rev actuals in
+            (* make a temporary for each formal parameter *)
+            let env, params = List.fold_left (fun (env, temps) (_, (ft, _)) ->
+              let env, temp = add_tmp env ft in
+              (env, temp :: temps)) (env, []) fd.formals in
+            let params = List.rev params in
+            (* copy in-parameters to temporaries *)
+            let stmts = List.fold_left2 (fun stmts temp (fq, actual) ->
+              if fq = Out then
+                stmts
+              else
+                let et = fst actual in
+                let ft = fst temp in
+                check_assign temp actual stmts
                   (Failure ("illegal actual argument found " ^ string_of_typ et ^
-                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
-                env, stmts, (se :: actuals)) (env, stmts, []) fd.formals actuals in
-            env, stmts, (fd.typ, SCall(fd.fname, List.rev actuals))
-      | TypeCons(typ, actuals) ->
+                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr call)))
+            stmts params actuals in
+            (* make call *)
+            let env, ret_tmp = if fd.typ = Void then
+              env, (Void, SNoexpr)
+            else
+              let env, tmp = add_tmp env fd.typ in
+              env, tmp in
+            let stmts = SCall(ret_tmp, fd.fname, params) :: stmts in
+            (* copy temporaries to out-parameters *)
+            let stmts = List.fold_left2 (fun stmts temp (fq, actual) ->
+              if fq = In then
+                stmts
+              else
+                let et = fst actual in
+                let ft = fst temp in
+                check_assign actual temp stmts
+                  (Failure ("illegal actual argument found " ^ string_of_typ et ^
+                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr call)))
+             stmts params actuals in
+            (* return the temporary we made for the call *)
+            env, stmts, ret_tmp
+      | TypeCons(typ, actuals) as cons ->
           let check_cons formals =
             if List.length actuals != List.length formals then
               raise (Failure ("expecting " ^ string_of_int (List.length formals) ^
                " arguments in constructor for " ^ string_of_typ typ))
             else 
-              let env, stmts, actuals = List.fold_left2
-                (fun (env, stmts, actuals) e ft ->
+              let env, stmts, actuals = List.fold_left
+                (* translate/evaluate function arguments *)
+                (fun (env, stmts, actuals) e ->
                   let env, stmts, se = expr env stmts e in
-                  let atyp = fst se in
-                  ignore (check_assign ft atyp
-                    (Failure ("expecting type " ^ string_of_typ ft ^
-                      " in constructor for " ^ string_of_typ typ)));
-                  env, stmts, se :: actuals) (env, stmts, []) actuals formals in
-              env, stmts, (typ, STypeCons(List.rev actuals))
+                  env, stmts, se :: actuals) (env, stmts, []) actuals in
+              let actuals = List.rev actuals in
+              (* make a temporary for each formal parameter *)
+              let env, params = List.fold_left (fun (env, temps) ft ->
+                let env, temp = add_tmp env ft in
+                (env, temp :: temps)) (env, []) formals in
+              let params = List.rev params in
+              (* copy in-parameters to temporaries *)
+              let stmts = List.fold_left2 (fun stmts temp actual ->
+                let et = fst actual in
+                let ft = fst temp in
+                check_assign temp actual stmts
+                  (Failure ("illegal actual argument found " ^ string_of_typ et ^
+                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr cons)))
+              stmts params actuals in
+              env, stmts, (typ, STypeCons(params))
           in
           let handle_array_vec base_type size =
             let rec copies n =
@@ -541,10 +600,12 @@ let check program =
             | Continue -> check_in_loop env; env, (SContinue :: sstmts)
             | Return e ->
                 let env, sstmts, se = expr env sstmts e in
-              ignore (check_assign func.typ (fst se) 
-                (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
-                         string_of_typ func.typ ^ " in " ^ string_of_expr e)));
-              env, (SReturn(se) :: sstmts)
+                let env, tmp = add_tmp env func.typ in
+                let sstmts = check_assign tmp se sstmts
+                  (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
+                           string_of_typ func.typ ^ " in " ^ string_of_expr e))
+                in
+                env, (SReturn(tmp) :: sstmts)
             | Block sl -> let env', sstmts = stmts' env sstmts sl in
                 { env with locals = env'.locals; names = env'.names; }, sstmts
             | If(p, b1, b2) ->
@@ -553,8 +614,7 @@ let check program =
                 let env, selse = check_stmt env env.in_loop b2 in
                 env, (SIf(p, sthen, selse) :: sstmts)
             | For(e1, e2, e3, st) ->
-                let env, sstmts, e1 = expr env sstmts e1 in
-                let sstmts = SExpr(e1) :: sstmts in
+                let env, sstmts, _ = expr env sstmts e1 in
                 let env, cond_stmts = check_stmt env true
                   (If (e2, Block([]), Break)) in (* if (!e2) break; *)
                 let env, continue_stmts =
@@ -567,8 +627,8 @@ let check program =
                 let env, body = check_stmt env true s in
                 env, (SLoop(cond_stmts @ body, []) :: sstmts)
             | Expr e -> 
-                let env, sstmts, e = expr env sstmts e in
-                env, (SExpr(e) :: sstmts)
+                let env, sstmts, _ = expr env sstmts e in
+                env, sstmts
             | Local ((t, s) as b, oe) ->
                 (check_type
                   (fun s n -> s ^ " does not exist for local " ^ n ^
@@ -579,12 +639,12 @@ let check program =
                 let env = { env with locals = (t, name) :: env.locals } in
                 match oe with
                     Some e -> let env, sstmts, e' = expr env sstmts e in
-                      ignore (check_assign t (fst e')
+                      let sstmts = check_assign (t, SId name) e' sstmts
                         (Failure ("illegal initialization " ^ string_of_typ t ^
                           " = " ^ string_of_typ (fst e') ^ " in " ^
                           string_of_typ t ^ " " ^ s ^ " = " ^ string_of_expr e ^
-                          ";")));
-                      env, SExpr(t, SAssign((t, SId name), e')) :: sstmts
+                          ";")) in
+                      env, sstmts
                   | None -> env, sstmts)
       (env, sstmts) sl
     in
@@ -642,9 +702,9 @@ let check program =
    * called for the GLSL backend since GLSL cares about the ordering.
    *)
   let func_succs fdecl =
-    fold_sfdecl_pre (fun calls expr ->
-      match snd expr with
-          SCall(name, _) -> StringMap.find name function_decls :: calls
+    fold_sfdecl_pre (fun calls stmt ->
+      match stmt with
+          SCall(_, name, _) -> StringMap.find name function_decls :: calls
         | _ -> calls)
     [] fdecl
   in

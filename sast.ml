@@ -21,15 +21,14 @@ type sexpr_detail =
   | SArrayDeref of sexpr * sexpr
   | SBinop of sexpr * sop * sexpr
   | SUnop of suop * sexpr
-  | SAssign of sexpr * sexpr
   | STypeCons of sexpr list
-  | SCall of string * sexpr list
   | SNoexpr
 
 and sexpr = typ * sexpr_detail
 
 type sstmt =
-    SExpr of sexpr
+    SAssign of sexpr * sexpr
+  | SCall of sexpr * string * sexpr list
   | SReturn of sexpr
   | SIf of sexpr * sstmt list * sstmt list
   | SLoop of sstmt list * sstmt list (* body, continue statements *)
@@ -55,44 +54,19 @@ type spipeline_decl = {
 type sprogram = struct_decl list * spipeline_decl list * bind list * sfunc_decl list
 
 
-(* do a pre-order traversal of all expression trees, calling 'f' and
+(* do a pre-order traversal of all statements, calling 'f' and
  * accumulating the results
  *)
 let fold_sfdecl_pre f a sfdecl =
-  let rec fold_expr_pre a e =
-    let a = f a e in
-    match snd e with
-        SStructDeref(e, _) -> fold_expr_pre a e
-      | SArrayDeref(e, idx) ->
-          let a = fold_expr_pre a e in
-          fold_expr_pre a idx
-      | SBinop(e1, _, e2) ->
-          let a = fold_expr_pre a e1 in
-          fold_expr_pre a e2
-      | SUnop(_, e) -> fold_expr_pre a e
-      | SAssign(e1, e2) ->
-          let a = fold_expr_pre a e1 in
-          fold_expr_pre a e2
-      | STypeCons(elist) -> fold_exprs_pre a elist
-      | SCall(_, elist) -> fold_exprs_pre a elist
-      | SIntLit(_) | SFloatLit(_) | SBoolLit(_) | SCharLit(_) | SStringLit(_)
-      | SId(_) | SNoexpr ->
-          a
-  and fold_exprs_pre a elist = List.fold_left fold_expr_pre a elist
-  in
-
-  let rec fold_stmt_pre a = function
-      SExpr(e) -> fold_expr_pre a e
-    | SReturn(e) -> fold_expr_pre a e
-    | SIf(pred, then_body, else_body) ->
-        let a = fold_expr_pre a pred in
-        let a = fold_stmts_pre a then_body in
-        fold_stmts_pre a else_body
-    | SLoop(body, continue) ->
-        let a = fold_stmts_pre a body in
-        fold_stmts_pre a continue
-    | SBreak -> a
-    | SContinue -> a
+  let rec fold_stmt_pre a stmt =
+    let a = f a stmt in match stmt with
+      | SIf(_, then_body, else_body) ->
+          let a = fold_stmts_pre a then_body in
+          fold_stmts_pre a else_body
+      | SLoop(body, continue) ->
+          let a = fold_stmts_pre a body in
+          fold_stmts_pre a continue
+      | SAssign(_, _) | SCall(_, _, _) | SReturn(_) | SBreak | SContinue -> a
   and fold_stmts_pre a elist =
     List.fold_left fold_stmt_pre a elist
   in
@@ -135,16 +109,18 @@ let rec string_of_sexpr (s : sexpr) = match snd s with
   | SBinop(e1, o, e2) ->
       string_of_sexpr e1 ^ " " ^ string_of_sop o ^ " " ^ string_of_sexpr e2
   | SUnop(o, e) -> string_of_suop o ^ string_of_sexpr e
-  | SAssign(v, e) -> string_of_sexpr v ^ " = " ^ string_of_sexpr e
-  | SCall(f, el) ->
-      f ^ "(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ")"
   | STypeCons(el) ->
       string_of_typ (fst s) ^ "(" ^
       String.concat ", " (List.map string_of_sexpr el) ^ ")"
   | SNoexpr -> ""
 
 let rec string_of_sstmt = function
-  | SExpr(expr) -> string_of_sexpr expr ^ ";\n";
+    SAssign(v, e) -> string_of_sexpr v ^ " = " ^ string_of_sexpr e ^ ";\n"
+  | SCall((Void, SNoexpr), f, el) ->
+      f ^ "(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ");\n"
+  | SCall(ret, f, el) ->
+      string_of_sexpr ret ^ " = " ^
+      f ^ "(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ");\n"
   | SReturn(expr) -> "return " ^ string_of_sexpr expr ^ ";\n";
   | SIf(e, s, []) -> "if (" ^ string_of_sexpr e ^ ")\n" ^ string_of_sstmts s
   | SIf(e, s1, s2) ->  "if (" ^ string_of_sexpr e ^ ")\n" ^
