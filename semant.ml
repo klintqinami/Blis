@@ -519,11 +519,11 @@ let check program =
           | _ -> match stmt with
               Break -> check_in_loop env; env, (SBreak :: sstmts)
             | Continue -> check_in_loop env; env, (SContinue :: sstmts)
-            | Return e -> let se = expr env e in if fst se = func.typ then
-                env, (SReturn(se) :: sstmts)
-              else
-                raise (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
-                         string_of_typ func.typ ^ " in " ^ string_of_expr e))
+            | Return e -> let se = expr env e in
+              ignore (check_assign func.typ (fst se) 
+                (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
+                         string_of_typ func.typ ^ " in " ^ string_of_expr e)));
+              env, (SReturn(se) :: sstmts)
             | Block sl -> let env', sstmts = stmts' env sstmts sl in
                 { env with locals = env'.locals; names = env'.names; }, sstmts
             | If(p, b1, b2) ->
