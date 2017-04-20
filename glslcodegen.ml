@@ -293,7 +293,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           let continue' = translate_stmts env continue in
           let env' = { env with forloop_update_statement = continue' } in
           let body' = translate_stmts env' body in
-          (env, stmts ^ "while (true) {\n" ^ body' ^ "}\n")
+          (env, stmts ^ "while (true) {\n" ^ body' ^ continue' ^ "}\n")
       | SA.SBreak -> (env, stmts ^ "break;\n")
       | SA.SContinue -> (env, stmts ^ env.forloop_update_statement ^ "continue;\n")
     in

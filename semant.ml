@@ -311,11 +311,12 @@ let check program =
                   ^ func.fname)))
     in
 
-    let rec lvalue need_lvalue env = function
-        Id s -> let t, s' = find_symbol_table env.scope s in (t, SId(s'))
-      | StructDeref(e, m) as d -> let e' = lvalue need_lvalue env e in
+    let rec lvalue need_lvalue env stmts = function
+        Id s -> let t, s' = find_symbol_table env.scope s in env, stmts, (t, SId(s'))
+      | StructDeref(e, m) as d ->
+          let env, stmts, e' = lvalue need_lvalue env stmts e in
           let typ = fst e' in
-          ((match typ with
+          env, stmts, ((match typ with
               Struct s ->
                 let stype = StringMap.find s struct_decls in
                 (try
@@ -341,12 +342,13 @@ let check program =
                 string_of_typ typ ^ " in " ^ string_of_expr d)))
           , SStructDeref(e', m))
       | ArrayDeref(e, i) as d ->
-          let e' = lvalue need_lvalue env e and i' = expr env i in
+          let env, stmts, e' = lvalue need_lvalue env stmts e in
+          let env, stmts, i' = expr env stmts i in
           if fst i' <> Vec(Int, 1) then
             raise (Failure ("index expression of of type " ^
               string_of_typ (fst i') ^ " instead of int in " ^
               string_of_expr d))
-          else (match fst e' with
+          else env, stmts, (match fst e' with
               Array(t, Some(_)) -> (t, SArrayDeref(e', i'))
             | Array(t, None) -> if env.cur_qualifier = CpuOnly
                 then (t, SArrayDeref(e', i'))
@@ -357,17 +359,21 @@ let check program =
           if need_lvalue then
             raise (Failure ("expression " ^ string_of_expr e ^ " is not an lvalue"))
           else
-            expr env e
+            expr env stmts e
 
     (* Return the type of an expression and new expression or throw an exception *)
-    and expr (env : translation_environment) = function
-	IntLit(l) -> (Vec(Int, 1), SIntLit(l))
-      | FloatLit(l) -> (Vec(Float, 1), SFloatLit(l))
-      | BoolLit(l) -> (Vec(Bool, 1), SBoolLit(l))
-      | CharLit(c) -> (Vec(Byte, 1), SCharLit(c))
-      | StringLit(s) -> (Array(Vec(Byte, 1), Some (String.length s)), SStringLit(s))
-      | Id _ | StructDeref(_, _) | ArrayDeref(_, _) as e -> lvalue false env e
-      | Binop(e1, op, e2) as e -> let e1 = expr env e1 and e2 = expr env e2 in
+    and expr (env : translation_environment) stmts = function
+	IntLit(l) -> env, stmts, (Vec(Int, 1), SIntLit(l))
+      | FloatLit(l) -> env, stmts, (Vec(Float, 1), SFloatLit(l))
+      | BoolLit(l) -> env, stmts, (Vec(Bool, 1), SBoolLit(l))
+      | CharLit(c) -> env, stmts, (Vec(Byte, 1), SCharLit(c))
+      | StringLit(s) ->
+          env, stmts, (Array(Vec(Byte, 1), Some (String.length s)), SStringLit(s))
+      | Id _ | StructDeref(_, _) | ArrayDeref(_, _) as e ->
+          lvalue false env stmts e
+      | Binop(e1, op, e2) as e ->
+        let env, stmts, e1 = expr env stmts e1 in
+        let env, stmts, e2 = expr env stmts e2 in
         let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op with
             Add when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), IAdd)
@@ -398,34 +404,38 @@ let check program =
                 string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
                 string_of_typ t2 ^ " in " ^ string_of_expr e))
           )
-        in (typ, SBinop(e1, op, e2))
-      | Unop(op, e) as ex -> let e = expr env e in
+        in env, stmts, (typ, SBinop(e1, op, e2))
+      | Unop(op, e) as ex -> let env, stmts, e = expr env stmts e in
          let t = fst e in
-	 (match op with
-	   Neg when t = Vec(Int, 1) -> (Vec(Int, 1), SUnop(INeg, e))
-	 | Neg when t = Vec(Float, 1) -> (Vec(Float, 1), SUnop(FNeg, e))
-	 | Not when t = Vec(Bool, 1) -> (Vec(Bool, 1), SUnop(BNot, e))
+         let typ, op = (match op with
+	   Neg when t = Vec(Int, 1) -> (Vec(Int, 1), INeg)
+	 | Neg when t = Vec(Float, 1) -> (Vec(Float, 1), FNeg)
+	 | Not when t = Vec(Bool, 1) -> (Vec(Bool, 1), BNot)
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
-	  		   string_of_typ t ^ " in " ^ string_of_expr ex)))
-      | Noexpr -> (Void, SNoexpr)
-      | Assign(lval, e) as ex -> let lval = lvalue true env lval in
-                                let e = expr env e in
-                                let lt = fst lval in
-                                let rt = fst e in
-        (check_assign lt rt (Failure ("illegal assignment " ^ string_of_typ lt ^
-				      " = " ^ string_of_typ rt ^ " in " ^ 
-				      string_of_expr ex)), SAssign(lval, e))
+	  		   string_of_typ t ^ " in " ^ string_of_expr ex))) in
+         env, stmts, (typ, SUnop(op, e))
+      | Noexpr -> env, stmts, (Void, SNoexpr)
+      | Assign(lval, e) as ex ->
+          let env, stmts, lval = lvalue true env stmts lval in
+          let env, stmts, e = expr env stmts e in
+          let lt = fst lval in
+          let rt = fst e in
+        env, stmts, (check_assign lt rt
+          (Failure ("illegal assignment " ^ string_of_typ lt ^
+	    " = " ^ string_of_typ rt ^ " in " ^ string_of_expr ex)),
+        SAssign(lval, e))
       | Call("length", [arr]) as call ->
-          let arr = expr env arr in
-          (match fst arr with
+          let env, stmts, arr = expr env stmts arr in
+          env, stmts, (match fst arr with
               Array(_, _) -> (Vec(Int, 1), SCall("length", [arr]))
             | _ as typ ->
                 raise (Failure ("expecting an array type instead of " ^
                   string_of_typ typ ^ " in " ^ string_of_expr call)))
       | Call("upload_buffer", [buf; data]) as call ->
           check_call_qualifiers env "upload_buffer" CpuOnly;
-          let buf = expr env buf and data = expr env data in
-          (match fst buf with
+          let env, stmts, buf = expr env stmts buf in
+          let env, stmts, data = expr env stmts data in
+          env, stmts, (match fst buf with
               Buffer(t) ->
                 (match fst data with
                     Array(t', _) -> if t' = t then
@@ -439,8 +449,8 @@ let check program =
                     "a buffer in " ^ string_of_expr call)))
       | Call("bind_pipeline", [p]) as call ->
           check_call_qualifiers env "bind_pipeline" CpuOnly;
-          let p' = expr env p in
-          (match fst p' with
+          let env, stmts, p' = expr env stmts p in
+          env, stmts, (match fst p' with
               Pipeline(_) ->
                 (Void, SCall("bind_pipeline", [p']))
             | _ as t -> raise (Failure ("calling bind_pipeline with " ^
@@ -452,30 +462,33 @@ let check program =
             raise (Failure ("expecting " ^ string_of_int
               (List.length fd.formals) ^ " arguments in " ^ string_of_expr call))
           else
-            (fd.typ, SCall(fd.fname,
-              List.map2 (fun (fq, (ft, _)) e ->
-                let se = if fq = In then
-                  expr env e
+            let env, stmts, actuals = List.fold_left2
+              (fun (env, stmts, actuals) (fq, (ft, _)) e ->
+                let env, stmts, se = if fq = In then
+                  expr env stmts e
                 else
-                  lvalue true env e in
+                  lvalue true env stmts e in
                 let et = fst se in
                 ignore (check_assign ft et
                   (Failure ("illegal actual argument found " ^ string_of_typ et ^
                   " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e)));
-                se)
-              fd.formals actuals))
+                env, stmts, (se :: actuals)) (env, stmts, []) fd.formals actuals in
+            env, stmts, (fd.typ, SCall(fd.fname, List.rev actuals))
       | TypeCons(typ, actuals) ->
           let check_cons formals =
             if List.length actuals != List.length formals then
               raise (Failure ("expecting " ^ string_of_int (List.length formals) ^
                " arguments in constructor for " ^ string_of_typ typ))
-            else (typ, STypeCons(List.map2 (fun e ft ->
-              let se = expr env e in
-              let atyp = fst se in
-              ignore (check_assign ft atyp
-                (Failure ("expecting type " ^ string_of_typ ft ^
-                  " in constructor for " ^ string_of_typ typ)));
-              se) actuals formals))
+            else 
+              let env, stmts, actuals = List.fold_left2
+                (fun (env, stmts, actuals) e ft ->
+                  let env, stmts, se = expr env stmts e in
+                  let atyp = fst se in
+                  ignore (check_assign ft atyp
+                    (Failure ("expecting type " ^ string_of_typ ft ^
+                      " in constructor for " ^ string_of_typ typ)));
+                  env, stmts, se :: actuals) (env, stmts, []) actuals formals in
+              env, stmts, (typ, STypeCons(List.rev actuals))
           in
           let handle_array_vec base_type size =
             let rec copies n =
@@ -487,7 +500,7 @@ let check program =
                * and we'll handle struct constructors as regular functions
                * anyways.
                *)
-            | Struct s -> expr env (Call(s, actuals))
+            | Struct s -> expr env stmts (Call(s, actuals))
             | Vec(b, w) -> handle_array_vec (Vec(b, 1)) w
             | Array(t, Some s) -> handle_array_vec t s
             | Array(_, None) -> check_cons [Vec(Int, 1)]
@@ -499,11 +512,11 @@ let check program =
                   
     in
 
-    let check_bool_expr env e =
-      let se = expr env e in 
+    let check_bool_expr env stmts e =
+      let env, stmts, se = expr env stmts e in 
         if fst se <> Vec(Bool, 1) then
           raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
-        else se in
+        else env, stmts, se in
 
     let check_in_loop env = if env.in_loop then () else
       raise (Failure ("break/continue must be inside a loop")) in
@@ -526,7 +539,8 @@ let check program =
           | _ -> match stmt with
               Break -> check_in_loop env; env, (SBreak :: sstmts)
             | Continue -> check_in_loop env; env, (SContinue :: sstmts)
-            | Return e -> let se = expr env e in
+            | Return e ->
+                let env, sstmts, se = expr env sstmts e in
               ignore (check_assign func.typ (fst se) 
                 (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
                          string_of_typ func.typ ^ " in " ^ string_of_expr e)));
@@ -534,23 +548,27 @@ let check program =
             | Block sl -> let env', sstmts = stmts' env sstmts sl in
                 { env with locals = env'.locals; names = env'.names; }, sstmts
             | If(p, b1, b2) ->
-                let p = check_bool_expr env p in
+                let env, sstmts, p = check_bool_expr env sstmts p in
                 let env, sthen = check_stmt env env.in_loop b1 in
                 let env, selse = check_stmt env env.in_loop b2 in
                 env, (SIf(p, sthen, selse) :: sstmts)
             | For(e1, e2, e3, st) ->
-                let e1 = expr env e1 in
-                let e2 = check_bool_expr env e2 in
-                let break_stmt = SIf(e2, [], [SBreak]) in
-                let e3 = expr env e3 in
+                let env, sstmts, e1 = expr env sstmts e1 in
+                let sstmts = SExpr(e1) :: sstmts in
+                let env, cond_stmts = check_stmt env true
+                  (If (e2, Block([]), Break)) in (* if (!e2) break; *)
+                let env, continue_stmts =
+                  check_stmt env false (Expr(e3)) in
                 let env, body = check_stmt env true st in
-                env, (SLoop(break_stmt :: body, [SExpr(e3)]) :: SExpr(e1) :: sstmts)
+                env, (SLoop(cond_stmts @ body, continue_stmts) :: sstmts)
             | While(p, s) ->
-                let p = check_bool_expr env p in
-                let break_stmt = SIf(p, [], [SBreak]) in
+                let env, cond_stmts = check_stmt env true
+                  (If (p, Block([]), Break)) in (* if (!p) break; *)
                 let env, body = check_stmt env true s in
-                env, (SLoop(break_stmt :: body, []) :: sstmts)
-            | Expr e -> env, (SExpr(expr env e) :: sstmts)
+                env, (SLoop(cond_stmts @ body, []) :: sstmts)
+            | Expr e -> 
+                let env, sstmts, e = expr env sstmts e in
+                env, (SExpr(e) :: sstmts)
             | Local ((t, s) as b, oe) ->
                 (check_type
                   (fun s n -> s ^ " does not exist for local " ^ n ^
@@ -560,7 +578,7 @@ let check program =
                 let env, name = add_symbol_table env s t in
                 let env = { env with locals = (t, name) :: env.locals } in
                 match oe with
-                    Some e -> let e' = expr env e in
+                    Some e -> let env, sstmts, e' = expr env sstmts e in
                       ignore (check_assign t (fst e')
                         (Failure ("illegal initialization " ^ string_of_typ t ^
                           " = " ^ string_of_typ (fst e') ^ " in " ^
