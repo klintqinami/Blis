@@ -289,23 +289,11 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
            "} else {\n" ^
               else_string ^
            "}\n")
-      | SA.SFor(e1, e2, e3, body) ->
-          let env, stmts, _ = expr env stmts e1 in
-          let env, stmts2, e2' = expr env "" e2 in
-          let env, stmts3, _ = expr env "" e3 in
-          let env' = {env with forloop_update_statement = stmts3 } in
-          let body_string = translate_stmts env' body in
-          (env, stmts ^
-           "while ( true ) {\n" ^ stmts2 ^ "\nif(!(" ^ e2' ^ ")){break;}\n" ^
-              body_string ^ stmts3 ^
-           "}\n")
-      | SA.SWhile(cond, body) ->
-          let env, stmts', cond' = expr env "" cond in
-          let body_string = translate_stmts env body in
-          (env, stmts ^
-           "while ( true ) {\n" ^ stmts' ^ "\nif(!(" ^ cond' ^ ")){break;}\n" ^
-               body_string ^
-           "}\n")
+      | SA.SLoop(body, continue) ->
+          let continue' = translate_stmts env continue in
+          let env' = { env with forloop_update_statement = continue' } in
+          let body' = translate_stmts env' body in
+          (env, stmts ^ "while (true) {\n" ^ body' ^ "}\n")
       | SA.SBreak -> (env, stmts ^ "break;\n")
       | SA.SContinue -> (env, stmts ^ env.forloop_update_statement ^ "continue;\n")
     in

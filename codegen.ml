@@ -462,42 +462,20 @@ let translate ((structs, pipelines, globals, functions) as program) =
 	 ignore (L.build_cond_br bool_val then_bb else_bb builder);
 	 L.builder_at_end context merge_bb
 
-      | SA.SWhile (predicate, body) ->
-	  let pred_bb = L.append_block context "while" the_function in
-	  let body_bb = L.append_block context "while_body" the_function in
-	  let merge_bb = L.append_block context "merge" the_function in
+      | SA.SLoop (body, continue) -> 
+          let body_bb = L.append_block context "loop_body" the_function in
+          let continue_bb = L.append_block context "loop_continue" the_function in
+          let merge_bb = L.append_block context "loop_merge" the_function in
 
-	  ignore (L.build_br pred_bb builder);
+          ignore (L.build_br body_bb builder);
 
-	  stmts merge_bb pred_bb (L.builder_at_end context body_bb) body
-	    (L.build_br pred_bb);
+          let body_builder = L.builder_at_end context body_bb in
+          stmts merge_bb continue_bb body_builder body
+            (L.build_br continue_bb);
 
-	  let pred_builder = L.builder_at_end context pred_bb in
-	  let bool_val = expr pred_builder predicate in
-	  ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
-
-	  L.builder_at_end context merge_bb
-
-      | SA.SFor (e1, e2, e3, body) -> 
-          ignore (expr builder e1);
-
-          let pred_bb = L.append_block context "for" the_function in
-          let body_bb = L.append_block context "for_body" the_function in
-          let final_bb = L.append_block context "for_end" the_function in
-          let merge_bb = L.append_block context "for_merge" the_function in
-
-          ignore (L.build_br pred_bb builder);
-
-          stmts merge_bb final_bb (L.builder_at_end context body_bb) body
-            (L.build_br final_bb);
-
-          let pred_builder = L.builder_at_end context pred_bb in
-          let bool_val = expr pred_builder e2 in
-          ignore (L.build_cond_br bool_val body_bb merge_bb pred_builder);
-
-          let final_builder = L.builder_at_end context final_bb in
-          ignore (expr final_builder e3);
-          ignore (L.build_br pred_bb final_builder);
+          let continue_builder = L.builder_at_end context continue_bb in
+          stmts merge_bb continue_bb continue_builder continue
+            (L.build_br body_bb);
 
           L.builder_at_end context merge_bb
 

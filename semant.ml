@@ -541,13 +541,15 @@ let check program =
             | For(e1, e2, e3, st) ->
                 let e1 = expr env e1 in
                 let e2 = check_bool_expr env e2 in
+                let break_stmt = SIf(e2, [], [SBreak]) in
                 let e3 = expr env e3 in
                 let env, body = check_stmt env true st in
-                  env, (SFor(e1, e2, e3, body) :: sstmts)
+                env, (SLoop(break_stmt :: body, [SExpr(e3)]) :: SExpr(e1) :: sstmts)
             | While(p, s) ->
                 let p = check_bool_expr env p in
+                let break_stmt = SIf(p, [], [SBreak]) in
                 let env, body = check_stmt env true s in
-                  env, (SWhile(p, body) :: sstmts)
+                env, (SLoop(break_stmt :: body, []) :: sstmts)
             | Expr e -> env, (SExpr(expr env e) :: sstmts)
             | Local ((t, s) as b, oe) ->
                 (check_type

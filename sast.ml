@@ -32,8 +32,7 @@ type sstmt =
     SExpr of sexpr
   | SReturn of sexpr
   | SIf of sexpr * sstmt list * sstmt list
-  | SFor of sexpr * sexpr * sexpr * sstmt list
-  | SWhile of sexpr * sstmt list
+  | SLoop of sstmt list * sstmt list (* body, continue statements *)
   | SBreak
   | SContinue
 
@@ -89,14 +88,9 @@ let fold_sfdecl_pre f a sfdecl =
         let a = fold_expr_pre a pred in
         let a = fold_stmts_pre a then_body in
         fold_stmts_pre a else_body
-    | SFor(e1, e2, e3, body) ->
-        let a = fold_expr_pre a e1 in
-        let a = fold_expr_pre a e2 in
-        let a = fold_expr_pre a e3 in
-        fold_stmts_pre a body
-    | SWhile(pred, body) ->
-        let a = fold_expr_pre a pred in
-        fold_stmts_pre a body
+    | SLoop(body, continue) ->
+        let a = fold_stmts_pre a body in
+        fold_stmts_pre a continue
     | SBreak -> a
     | SContinue -> a
   and fold_stmts_pre a elist =
@@ -155,10 +149,10 @@ let rec string_of_sstmt = function
   | SIf(e, s, []) -> "if (" ^ string_of_sexpr e ^ ")\n" ^ string_of_sstmts s
   | SIf(e, s1, s2) ->  "if (" ^ string_of_sexpr e ^ ")\n" ^
       string_of_sstmts s1 ^ "else\n" ^ string_of_sstmts s2
-  | SFor(e1, e2, e3, s) ->
-      "for (" ^ string_of_sexpr e1  ^ " ; " ^ string_of_sexpr e2 ^ " ; " ^
-      string_of_sexpr e3  ^ ") " ^ string_of_sstmts s
-  | SWhile(e, s) -> "while (" ^ string_of_sexpr e ^ ") " ^ string_of_sstmts s
+  | SLoop(body, continue) ->
+      "loop {\n" ^ String.concat "" (List.map string_of_sstmt body) ^
+      "continue_block:\n" ^
+      String.concat "" (List.map string_of_sstmt continue) ^ "}\n"
   | SBreak -> "break;\n"
   | SContinue -> "continue;\n"
 and string_of_sstmts stmts =
