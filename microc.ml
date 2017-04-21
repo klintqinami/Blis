@@ -13,6 +13,7 @@ let print_glsl glsl =
 
 let _ =
   let action = ref Compile in
+  let input = ref "" in
   let set_action a () = action := a in
   let speclist = [
     ("-a", Arg.Unit (set_action Ast), "Print the SAST");
@@ -22,8 +23,13 @@ let _ =
       "Check and print the generated LLVM IR (default)");
   ] in
   let usage_msg = "You idiot!" in
-  Arg.parse speclist ignore usage_msg;
-  let lexbuf = Lexing.from_channel stdin in
+  Arg.parse speclist (fun s -> input := s) usage_msg;
+  let channel = if !input = "" then
+    stdin
+  else
+    open_in !input
+  in
+  let lexbuf = Lexing.from_channel channel in
   let ast = Parser.program Scanner.token lexbuf in
   let sast = Semant.check ast in
   match !action with
