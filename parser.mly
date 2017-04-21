@@ -12,10 +12,11 @@ open Ast
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token INT BOOL BYTE VOID STRUCT PIPELINE BUFFER WINDOW
+%token BOOL BYTE VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
 %token IN OUT INOUT
 %token <int> FLOAT
+%token <int> INT
 %token <int> INT_LITERAL
 %token <float> FLOAT_LITERAL
 %token <char> CHAR_LITERAL
@@ -118,7 +119,7 @@ arrays:
   | arrays LBRACKET RBRACKET { None :: $1 }
 
 no_array_typ:
-    INT { Mat(Int, 1, 1) }
+    INT { Mat(Int, $1, 1) }
   | FLOAT { Mat(Float, $1, 1) }
   | BOOL { Mat(Bool, 1, 1) }
   | BYTE { Mat(Byte, 1, 1) }

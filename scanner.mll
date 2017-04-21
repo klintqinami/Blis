@@ -39,7 +39,7 @@ rule token = parse
 | "return" { RETURN }
 | "break"  { BREAK }
 | "continue" { CONTINUE }
-| "int"    { INT }
+| "int"    { INT(1) }
 | "float"  { FLOAT(1) }
 | "vec" (digits as width) {
   let width = int_of_string width in
@@ -47,6 +47,12 @@ rule token = parse
     raise (Failure("vecN with N not between 2 and 4"))
   else
     FLOAT(width) }
+| "ivec" (digits as width) {
+  let width = int_of_string width in
+  if width < 2 || width > 4 then
+    raise (Failure("ivecN with N not between 2 and 4"))
+  else
+    INT(width) }
 | "u8"     { BYTE }
 | "bool"   { BOOL }
 | "window" { WINDOW }
