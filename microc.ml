@@ -22,7 +22,7 @@ let _ =
     ("-c", Arg.Unit (set_action Compile),
       "Check and print the generated LLVM IR (default)");
   ] in
-  let usage_msg = "You idiot!" in
+  let usage_msg = "usage: ./microc.native [-a|-g|-l] [file]" in
   Arg.parse speclist (fun s -> input := s) usage_msg;
   let channel = if !input = "" then
     stdin
