@@ -5,8 +5,10 @@
 # Easiest way to build: using ocamlbuild, which in turn uses ocamlfind
 
 .PHONY: all
-all: microc.native microc.d.byte runtime.o
+all: microc.native runtime.o
 
+.PHONY: debug
+debug: microc.d.byte runtime.o
 
 runtime.o: runtime.c
 	cc -I/usr/local/include -c -g -o runtime.o runtime.c
