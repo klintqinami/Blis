@@ -129,9 +129,9 @@ void init(void)
 GLFWwindow *create_window(int width, int height, int offscreen)
 {
   if (offscreen)
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_VISIBLE, false);
   else
-    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+    glfwWindowHint(GLFW_VISIBLE, true);
 
   GLFWwindow *window = glfwCreateWindow(width, height, "Blis", NULL, NULL);
   if (!window) {
