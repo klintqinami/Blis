@@ -53,8 +53,20 @@ rule token = parse
     raise (Failure("ivecN with N not between 2 and 4"))
   else
     INT(width) }
-| "u8"     { BYTE }
-| "bool"   { BOOL }
+| "u8"     { BYTE(1) }
+| "bool"   { BOOL(1) }
+| "bvec" (digits as width) {
+  let width = int_of_string width in
+  if width < 2 || width > 4 then
+    raise (Failure("bvecN with N not between 2 and 4"))
+  else
+    BOOL(width) }
+| "u8vec" (digits as width) {
+  let width = int_of_string width in
+  if width < 2 || width > 4 then
+    raise (Failure("u8vecN with N not between 2 and 4"))
+  else
+    BYTE(width) }
 | "window" { WINDOW }
 | "buffer" { BUFFER }
 | "pipeline" { PIPELINE }

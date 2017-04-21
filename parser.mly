@@ -15,6 +15,8 @@ open Ast
 %token BOOL BYTE VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
 %token IN OUT INOUT
+%token <int> BOOL
+%token <int> BYTE
 %token <int> FLOAT
 %token <int> INT
 %token <int> INT_LITERAL
@@ -121,8 +123,8 @@ arrays:
 no_array_typ:
     INT { Mat(Int, $1, 1) }
   | FLOAT { Mat(Float, $1, 1) }
-  | BOOL { Mat(Bool, 1, 1) }
-  | BYTE { Mat(Byte, 1, 1) }
+  | BOOL { Mat(Bool, $1, 1) }
+  | BYTE { Mat(Byte, $1, 1) }
   | STRUCT ID { Struct($2) }
   | PIPELINE ID { Pipeline($2) }
   | BUFFER LT typ GT { Buffer($3) }
