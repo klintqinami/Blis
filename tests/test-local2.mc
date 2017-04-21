@@ -9,6 +9,6 @@ int foo(int a, bool b)
 }
 
 int main() {
- print(foo(37, false));
+ printi(foo(37, false));
  return 0;
 }

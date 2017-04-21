@@ -1,6 +1,6 @@
 void foo(int a)
 {
-  print(a + 3);
+  printi(a + 3);
 }
 
 int main()

@@ -201,7 +201,7 @@ let check program =
     let int1 = Mat(Int, 1, 1) and bool1 = Mat(Bool, 1, 1) and float1 =
         Mat(Float, 1, 1)
     and byte1 = Mat(Byte, 1, 1) in [
-     { typ = Void; fname = "print"; formals = [In, (int1, "x")];
+     { typ = Void; fname = "printi"; formals = [In, (int1, "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printb"; formals = [In, (bool1, "x")];
        fqual = CpuOnly; body = [] };

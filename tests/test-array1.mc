@@ -5,7 +5,7 @@ int main()
 
   a[3] = 42;
   for (i = 0; i < 5; i = i + 1)
-    print(a[i]);
+    printi(a[i]);
 
   return 0;
 }

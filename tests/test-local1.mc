@@ -3,7 +3,7 @@ void foo(bool i)
   int i; /* Should hide the formal i */
 
   i = 42;
-  print(i + i);
+  printi(i + i);
 }
 
 int main()

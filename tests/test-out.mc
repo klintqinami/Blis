@@ -7,6 +7,6 @@ int main()
 {
   int y;
   one(y);
-  print(y);
+  printi(y);
   return 0;
 }

@@ -379,7 +379,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
        the statement's successor *)
     and stmt break_bb continue_bb builder = function
         SA.SAssign (lval, e) -> handle_assign builder lval e; builder
-      | SA.SCall (_, "print", [e]) | SA.SCall (_, "printb", [e]) ->
+      | SA.SCall (_, "printi", [e]) | SA.SCall (_, "printb", [e]) ->
 	  ignore
             (L.build_call printf_func [| int_format_str ; (expr builder e) |]
             "printf" builder);

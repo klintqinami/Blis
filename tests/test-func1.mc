@@ -7,6 +7,6 @@ int main()
 {
   int a;
   a = add(39, 3);
-  print(a);
+  printi(a);
   return 0;
 }

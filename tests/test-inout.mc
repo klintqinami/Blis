@@ -1,6 +1,6 @@
 void one(inout int y)
 {
-  print(y);
+  printi(y);
   y = 42;
 }
 
@@ -8,6 +8,6 @@ int main()
 {
   int y = 1;
   one(y);
-  print(y);
+  printi(y);
   return 0;
 }

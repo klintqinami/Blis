@@ -5,7 +5,7 @@ struct foo {
 
 int main() {
     struct foo temp = foo(42, 1337.0);
-    print(temp.a);
+    printi(temp.a);
     printf(temp.b);
 
     return 0;   

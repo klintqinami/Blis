@@ -6,7 +6,7 @@ int main()
 {
   struct foo bar;
   bar.a = 42;
-  print(bar.a);
+  printi(bar.a);
 
   return 0;
 }

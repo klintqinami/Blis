@@ -9,6 +9,6 @@ int main()
 {
   int d;
   d = add(52, 10);
-  print(d);
+  printi(d);
   return 0;
 }

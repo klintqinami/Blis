@@ -1,7 +1,7 @@
 int main()
 {
-  print(42);
-  print(71);
-  print(1);
+  printi(42);
+  printi(71);
+  printi(1);
   return 0;
 }

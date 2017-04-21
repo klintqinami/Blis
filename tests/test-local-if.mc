@@ -5,6 +5,6 @@ int main()
     int x = 2;
     a = a + x;
   }
-  print(a);
+  printi(a);
   return 0;
 }

@@ -2,6 +2,6 @@ int main()
 {
   int a;
   a = 42;
-  print(a);
+  printi(a);
   return 0;
 }

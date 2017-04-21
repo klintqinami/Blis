@@ -11,7 +11,7 @@ struct foo my_func()
 
 int main()
 {
-  print(my_func().a);
+  printi(my_func().a);
 
   return 0;
 }

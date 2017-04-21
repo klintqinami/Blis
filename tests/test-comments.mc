@@ -10,6 +10,6 @@ int add(int /**/ x, int y)
 
 int main()
 {
-  print( add(17, 25) );
+  printi( add(17, 25) );
   return 0;
 }

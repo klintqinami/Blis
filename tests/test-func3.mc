@@ -1,9 +1,9 @@
 void printem(int a, int b, int c, int d)
 {
-  print(a);
-  print(b);
-  print(c);
-  print(d);
+  printi(a);
+  printi(b);
+  printi(c);
+  printi(d);
 }
 
 int main()

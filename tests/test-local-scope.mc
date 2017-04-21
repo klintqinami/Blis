@@ -3,14 +3,14 @@ int main()
   int i = 42;
 
   {
-    print(i); // still 42
+    printi(i); // still 42
 
     int i = 43;
-    print(i); // now 43
+    printi(i); // now 43
   }
 
   // 42 again
-  print(i);
+  printi(i);
 
   return 0;
 }

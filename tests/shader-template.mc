@@ -45,8 +45,8 @@ int main()
     for (x = 0; x < 10; x = x + 1) {
       vec4 pixel = read_pixel(x, y);
       if (pixel.x != 0. || pixel.y != 1. || pixel.z != 0.) {
-        print(x);
-        print(y);
+        printi(x);
+        printi(y);
         printf(pixel.x);
         printf(pixel.y);
         printf(pixel.z);

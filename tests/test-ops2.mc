@@ -12,7 +12,7 @@ int main()
   printb(false || false);
   printb(!false);
   printb(!true);
-  print(-10);
-  print(--42);
+  printi(-10);
+  printi(--42);
   return 0;
 }

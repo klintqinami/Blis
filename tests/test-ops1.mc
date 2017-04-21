@@ -1,26 +1,26 @@
 int main()
 {
-  print(1 + 2);
-  print(1 - 2);
-  print(1 * 2);
-  print(100 / 2);
-  print(99);
+  printi(1 + 2);
+  printi(1 - 2);
+  printi(1 * 2);
+  printi(100 / 2);
+  printi(99);
   printb(1 == 2);
   printb(1 == 1);
-  print(99);
+  printi(99);
   printb(1 != 2);
   printb(1 != 1);
-  print(99);
+  printi(99);
   printb(1 < 2);
   printb(2 < 1);
-  print(99);
+  printi(99);
   printb(1 <= 2);
   printb(1 <= 1);
   printb(2 <= 1);
-  print(99);
+  printi(99);
   printb(1 > 2);
   printb(2 > 1);
-  print(99);
+  printi(99);
   printb(1 >= 2);
   printb(1 >= 1);
   printb(2 >= 1); 
