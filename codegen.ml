@@ -116,6 +116,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
     shaders
   in
 
+  let blis_string_t = ltype_of_typ (A.Array(A.Mat(A.Byte, 1, 1), None)) in
+
   (* Declare printf(), which the print built-in function will call *)
   let printf_t = L.var_arg_function_type i32_t [| voidp_t |] in
   let printf_func = L.declare_function "printf" printf_t the_module in
@@ -169,6 +171,14 @@ let translate ((structs, pipelines, globals, functions) as program) =
     L.function_type void_t [| i32_t; i32_t; L.pointer_type vec_t.(3) |] in
   let read_pixel_func =
     L.declare_function "read_pixel" read_pixel_t the_module in
+  let read_file_t =
+    L.function_type void_t [| L.pointer_type blis_string_t; blis_string_t |] in
+  let read_file_func =
+    L.declare_function "read_file" read_file_t the_module in
+  let print_string_t =
+    L.function_type void_t [| blis_string_t |] in
+  let print_string_func =
+    L.declare_function "print_string" print_string_t the_module in
 
   (* Define each function (arguments and return type) so we can call it *)
   let function_decls =
@@ -379,6 +389,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
        the statement's successor *)
     and stmt break_bb continue_bb builder = function
         SA.SAssign (lval, e) -> handle_assign builder lval e; builder
+      | SA.SCall (_, "print", [e]) ->
+          let e' = expr builder e in
+          ignore (L.build_call print_string_func [| e' |] "" builder);
+          builder
       | SA.SCall (_, "printi", [e]) | SA.SCall (_, "printb", [e]) ->
 	  ignore
             (L.build_call printf_func [| int_format_str ; (expr builder e) |]
@@ -451,6 +465,11 @@ let translate ((structs, pipelines, globals, functions) as program) =
             | A.Array(_, None) -> L.build_extractvalue arr' 0 "" builder
             | _ -> raise (Failure "unexpected type")) in
           ignore (L.build_store len ret builder); builder
+      | SA.SCall (ret, "read_file", [path]) ->
+          let path = expr builder path in
+          let ret = lvalue builder ret in
+          ignore (L.build_call read_file_func [| ret; path |] "" builder);
+          builder
       | SA.SCall (ret, f, act) ->
          let (fdef, fdecl) = StringMap.find f function_decls in
 	 let actuals = (List.map2 (fun (q, (_, _)) e ->

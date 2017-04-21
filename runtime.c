@@ -7,6 +7,7 @@
 #endif
 #include <GLFW/glfw3.h> /* window creation and input handling crap */
 #include <stdbool.h> /* for true */
+#include <string.h>
 
 struct pipeline {
   GLuint vertex_array;
@@ -173,5 +174,39 @@ void poll_events(void)
 bool should_close(GLFWwindow *window)
 {
   return glfwWindowShouldClose(window);
+}
+
+struct blis_string {
+  int size;
+  char *str; // note: NOT NUL-terminated
+};
+
+void read_file(struct blis_string *file, struct blis_string path)
+{
+  char *fpath = malloc(path.size + 1);
+  // Out-of-memory error? What error?
+  memcpy(fpath, path.str, path.size);
+  fpath[path.size] = '\0';
+
+  FILE *f = fopen(fpath, "r");
+  if (!f) {
+    fprintf(stderr, "couldn't open file %s\n", fpath);
+    exit(1);
+  }
+
+  fseek(f, 0, SEEK_END);
+  int fsize = ftell(f); // 2^31 ought to be large enough for everyone...
+  fseek(f, 0, SEEK_SET);
+
+  file->size = fsize;
+  file->str = malloc(fsize);
+  fread(file->str, fsize, 1, f);
+
+  fclose(f);
+}
+
+void print_string(struct blis_string str)
+{
+  fwrite(str.str, str.size, 1, stdout);
 }
 
