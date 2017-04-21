@@ -746,7 +746,13 @@ let check program =
   let func_succs fdecl =
     fold_sfdecl_pre (fun calls stmt ->
       match stmt with
-          SCall(_, name, _) -> StringMap.find name function_decls :: calls
+          SCall(_, name, _) ->
+            try
+              StringMap.find name function_decls :: calls
+            (* since we already did semantic checking, we can ignore calls to
+             * functions that don't exist as they must be to built-in functions
+             *)
+            with Not_found -> calls 
         | _ -> calls)
     [] fdecl
   in

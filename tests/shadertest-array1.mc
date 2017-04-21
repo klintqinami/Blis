@@ -10,6 +10,9 @@
       error = true;
     i = i + 1;
   }
+  if (length(a) != 5) {
+    error = true;
+  }
   if (error)
     color = vec3(1., 0., 0.);
   else

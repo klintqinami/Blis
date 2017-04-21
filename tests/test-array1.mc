@@ -7,5 +7,7 @@ int main()
   for (i = 0; i < 5; i = i + 1)
     printi(a[i]);
 
+  printi(length(a));
+
   return 0;
 }

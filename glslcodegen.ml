@@ -252,6 +252,8 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           let l' = expr env l in
           let r' = expr env r in
           "(" ^ l' ^ ") = (" ^ r' ^ ");\n"
+      | SA.SCall(ret, "length", [arr]) ->
+          expr env ret ^ " = " ^ "(" ^ expr env arr ^ ".length();\n"
       | SA.SCall((A.Void, SA.SNoexpr), name, elist) ->
           let elist' = expr_list env elist
           in
