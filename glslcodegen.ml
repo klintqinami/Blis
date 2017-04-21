@@ -28,7 +28,6 @@ type translation_environment = {
  * usually a prefix of the new name, although this may not be true if the
  * original name is reserved by OpenGL.
  *
- * TODO handle GLSL keywords
  *)
 let add_symbol_table table orig =
   (* copied from the GLSL 3.30 spec. The weird line wrapping is identical to the
@@ -132,12 +131,13 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
    * for example, returns "vec4" for vec4[10][2]
    *)
   let rec string_of_base_typ = function
-      A.Vec(A.Int, 1) | A.Vec(A.Byte, 1) -> "int"
-    | A.Vec(A.Float, 1) -> "float"
-    | A.Vec(A.Bool, 1) -> "bool"
-    | A.Vec(A.Int, n) | A.Vec(A.Byte, n) -> "ivec" ^ string_of_int n
-    | A.Vec(A.Float, n) -> "vec" ^ string_of_int n
-    | A.Vec(A.Bool, n) -> "bvec" ^ string_of_int n
+      A.Mat(A.Int, 1, 1) | A.Mat(A.Byte, 1, 1) -> "int"
+    | A.Mat(A.Float, 1, 1) -> "float"
+    | A.Mat(A.Bool, 1, 1) -> "bool"
+    | A.Mat(A.Int, l, 1) | A.Mat(A.Byte, l, 1) -> "ivec" ^ string_of_int l
+    | A.Mat(A.Float, l, 1) -> "vec" ^ string_of_int l
+    | A.Mat(A.Bool, l, 1) -> "bvec" ^ string_of_int l
+    | A.Mat(_, _, _) -> raise (Failure "unimplemented")
     | A.Struct(name) -> StringMap.find name struct_table.scope
     | A.Buffer(_) -> "dummy_struct"
     | A.Window -> "dummy_struct"
@@ -206,7 +206,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       | SA.SId(n) -> StringMap.find n env.table.scope
       | SA.SStructDeref(e, mem) -> let e' = expr env e in
           (match fst e with
-              A.Vec(_, _) -> "(" ^ e' ^ ")." ^ mem
+              A.Mat(_, _, 1) -> "(" ^ e' ^ ")." ^ mem
             | A.Struct(name) ->
                 let members = StringMap.find name struct_members in
                 let glsl_mem = StringMap.find mem members.scope in
@@ -234,7 +234,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
               SA.INeg | SA.FNeg -> "-"
             | SA.BNot -> "!") ^ "(" ^ expr env e ^ ")"
       | SA.STypeCons(elist) -> (match typ with
-          A.Vec(_, _) | A.Array(_, _) ->
+          A.Mat(_, _, 1) | A.Array(_, _) ->
             let elist' = expr_list env elist
             in
             string_of_typ typ ^ "(" ^ elist' ^ ")"

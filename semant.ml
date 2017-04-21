@@ -93,7 +93,7 @@ let check program =
   in
 
   let check_buffer_type = function
-      Vec(Float, _) -> ()
+      Mat(Float, _, 1) -> ()
     | _ as t -> raise (Failure ("bad type " ^ string_of_typ t ^ " for buffer"))
   in
 
@@ -198,8 +198,9 @@ let check program =
   (* Function declaration for a named function *)
 
   let built_in_decls =
-    let int1 = Vec(Int, 1) and bool1 = Vec(Bool, 1) and float1 = Vec(Float, 1)
-    and byte1 = Vec(Byte, 1) in [
+    let int1 = Mat(Int, 1, 1) and bool1 = Mat(Bool, 1, 1) and float1 =
+        Mat(Float, 1, 1)
+    and byte1 = Mat(Byte, 1, 1) in [
      { typ = Void; fname = "print"; formals = [In, (int1, "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printb"; formals = [In, (bool1, "x")];
@@ -210,16 +211,16 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "set_active_window"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
-     { typ = Void; fname = "draw_arrays"; formals = [In, (Vec(Int, 1), "n")];
+     { typ = Void; fname = "draw_arrays"; formals = [In, (int1, "n")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "swap_buffers"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "poll_events"; formals = [];
        fqual = CpuOnly; body = [] };
-     { typ = Vec(Bool, 1); fname = "window_should_close";
+     { typ = bool1; fname = "window_should_close";
        formals = [In, (Window, "w")]; fqual = CpuOnly; body = [] };
-     { typ = Vec(Float, 4); fname = "read_pixel";
-       formals = [In, (Vec(Int, 1), "x"); In, (Vec(Int, 1), "y")];
+     { typ = Mat(Float, 4, 1); fname = "read_pixel";
+       formals = [In, (int1, "x"); In, (int1, "y")];
        fqual = CpuOnly; body = [] };
     ]
   in
@@ -344,11 +345,11 @@ let check program =
                 with Not_found ->
                   raise (Failure ("pipeline " ^ p ^ " does not contain input " ^
                   m ^ " in " ^ string_of_expr d)))
-            | Vec(b, w) ->
+            | Mat(b, w, 1) ->
                 (match m with
-                    "x" | "y" when w >= 2 -> Vec(b, 1)
-                  | "z" when w >= 3 -> Vec(b, 1)
-                  | "w" when w = 4 -> Vec(b, 1)
+                    "x" | "y" when w >= 2 -> Mat(b, 1, 1)
+                  | "z" when w >= 3 -> Mat(b, 1, 1)
+                  | "w" when w = 4 -> Mat(b, 1, 1)
                   | _ -> raise (Failure ("dereference of nonexistant member " ^ m ^
                       " of a vector")))
             | _ -> raise (Failure ("illegal dereference of type " ^
@@ -357,7 +358,7 @@ let check program =
       | ArrayDeref(e, i) as d ->
           let env, stmts, e' = lvalue need_lvalue env stmts e in
           let env, stmts, i' = expr env stmts i in
-          if fst i' <> Vec(Int, 1) then
+          if fst i' <> Mat(Int, 1, 1) then
             raise (Failure ("index expression of of type " ^
               string_of_typ (fst i') ^ " instead of int in " ^
               string_of_expr d))
@@ -376,12 +377,12 @@ let check program =
 
     (* Return the type of an expression and new expression or throw an exception *)
     and expr (env : translation_environment) stmts = function
-	IntLit(l) -> env, stmts, (Vec(Int, 1), SIntLit(l))
-      | FloatLit(l) -> env, stmts, (Vec(Float, 1), SFloatLit(l))
-      | BoolLit(l) -> env, stmts, (Vec(Bool, 1), SBoolLit(l))
-      | CharLit(c) -> env, stmts, (Vec(Byte, 1), SCharLit(c))
+	IntLit(l) -> env, stmts, (Mat(Int, 1, 1), SIntLit(l))
+      | FloatLit(l) -> env, stmts, (Mat(Float, 1, 1), SFloatLit(l))
+      | BoolLit(l) -> env, stmts, (Mat(Bool, 1, 1), SBoolLit(l))
+      | CharLit(c) -> env, stmts, (Mat(Byte, 1, 1), SCharLit(c))
       | StringLit(s) ->
-          env, stmts, (Array(Vec(Byte, 1), Some (String.length s)), SStringLit(s))
+          env, stmts, (Array(Mat(Byte, 1, 1), Some (String.length s)), SStringLit(s))
       | Id _ | StructDeref(_, _) | ArrayDeref(_, _) as e ->
           lvalue false env stmts e
       | Binop(e1, op, e2) as e ->
@@ -389,30 +390,31 @@ let check program =
         let env, stmts, e2 = expr env stmts e2 in
         let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op with
-            Add when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), IAdd)
-          | Sub when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), ISub)
-          | Mult when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), IMult)
-          | Div when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Int, 1), IDiv)
-          | Equal when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), IEqual)
-          | Neq when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), INeq)
-          | Add when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FAdd)
-          | Sub when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FSub)
-          | Mult when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FMult)
-          | Div when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Float, 1), FDiv)
-          | Equal when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FEqual)
-          | Neq when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FNeq)
-          | Less when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FLess)
-          | Leq when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FLeq)
-          | Greater when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FGreater)
-          | Geq when t1 = Vec(Float, 1) && t2 = Vec(Float, 1) -> (Vec(Bool, 1), FGeq)
-          | Equal when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BEqual)
-          | Neq when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BNeq)
-          | Less when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), ILess)
-          | Leq when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), ILeq)
-          | Greater when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), IGreater)
-          | Geq when t1 = Vec(Int, 1) && t2 = Vec(Int, 1) -> (Vec(Bool, 1), IGeq)
-          | And when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BAnd)
-          | Or when t1 = Vec(Bool, 1) && t2 = Vec(Bool, 1) -> (Vec(Bool, 1), BOr)
+            Add when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Int,
+            1, 1), IAdd)
+          | Sub when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Int, 1, 1), ISub)
+          | Mult when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Int,1, 1), IMult)
+          | Div when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Int, 1, 1), IDiv)
+          | Equal when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Bool, 1, 1), IEqual)
+          | Neq when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Bool, 1, 1), INeq)
+          | Add when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FAdd)
+          | Sub when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FSub)
+          | Mult when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FMult)
+          | Div when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FDiv)
+          | Equal when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FEqual)
+          | Neq when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FNeq)
+          | Less when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FLess)
+          | Leq when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FLeq)
+          | Greater when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FGreater)
+          | Geq when t1 = Mat(Float, 1, 1) && t2 = Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FGeq)
+          | Equal when t1 = Mat(Bool, 1, 1) && t2 = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BEqual)
+          | Neq when t1 = Mat(Bool, 1, 1) && t2 = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BNeq)
+          | Less when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Bool, 1, 1), ILess)
+          | Leq when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Bool, 1, 1), ILeq)
+          | Greater when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Bool, 1, 1), IGreater)
+          | Geq when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Bool, 1, 1), IGeq)
+          | And when t1 = Mat(Bool, 1, 1) && t2 = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BAnd)
+          | Or when t1 = Mat(Bool, 1, 1) && t2 = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BOr)
           | _ -> raise (Failure ("illegal binary operator " ^
                 string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
                 string_of_typ t2 ^ " in " ^ string_of_expr e))
@@ -421,9 +423,9 @@ let check program =
       | Unop(op, e) as ex -> let env, stmts, e = expr env stmts e in
          let t = fst e in
          let typ, op = (match op with
-	   Neg when t = Vec(Int, 1) -> (Vec(Int, 1), INeg)
-	 | Neg when t = Vec(Float, 1) -> (Vec(Float, 1), FNeg)
-	 | Not when t = Vec(Bool, 1) -> (Vec(Bool, 1), BNot)
+	   Neg when t = Mat(Int, 1, 1) -> (Mat(Int, 1, 1), INeg)
+	 | Neg when t = Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FNeg)
+	 | Not when t = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BNot)
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex))) in
          env, stmts, (typ, SUnop(op, e))
@@ -437,7 +439,7 @@ let check program =
           lval
       | Call("length", [arr]) as call ->
           let env, stmts, arr = expr env stmts arr in
-          let env, tmp = add_tmp env (Vec(Int, 1)) in
+          let env, tmp = add_tmp env (Mat(Int, 1, 1)) in
           env, (match fst arr with
               Array(_, _) -> SCall(tmp, "length", [arr])
             | _ as typ ->
@@ -560,12 +562,12 @@ let check program =
                * anyways.
                *)
             | Struct s -> expr env stmts (Call(s, actuals))
-            | Vec(b, w) -> handle_array_vec (Vec(b, 1)) w
+            | Mat(b, w, 1) -> handle_array_vec (Mat(b, 1, 1)) w
             | Array(t, Some s) -> handle_array_vec t s
-            | Array(_, None) -> check_cons [Vec(Int, 1)]
+            | Array(_, None) -> check_cons [Mat(Int, 1, 1)]
             | Buffer(t) -> check_buffer_type t; check_cons []
             | Pipeline(_) -> check_cons []
-            | Window -> check_cons [Vec(Int, 1); Vec(Int, 1); Vec(Bool, 1)]
+            | Window -> check_cons [Mat(Int, 1, 1); Mat(Int, 1, 1); Mat(Bool, 1, 1)]
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));
                   
@@ -573,7 +575,7 @@ let check program =
 
     let check_bool_expr env stmts e =
       let env, stmts, se = expr env stmts e in 
-        if fst se <> Vec(Bool, 1) then
+        if fst se <> Mat(Bool, 1, 1) then
           raise (Failure ("expected Boolean expression in " ^ string_of_expr e))
         else env, stmts, se in
 
@@ -651,7 +653,7 @@ let check program =
 
     (* check return type of shaders *)
     (match func.fqual with
-        Vertex -> if func.typ <> Vec(Float, 4) then
+        Vertex -> if func.typ <> Mat(Float, 4, 1) then
           raise (Failure ("vertex entrypoint " ^ func.fname ^
             " must return vec4"))
         else

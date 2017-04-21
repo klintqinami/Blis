@@ -118,10 +118,10 @@ arrays:
   | arrays LBRACKET RBRACKET { None :: $1 }
 
 no_array_typ:
-    INT { Vec(Int, 1) }
-  | FLOAT { Vec(Float, $1) }
-  | BOOL { Vec(Bool, 1) }
-  | BYTE { Vec(Byte, 1) }
+    INT { Mat(Int, 1, 1) }
+  | FLOAT { Mat(Float, $1, 1) }
+  | BOOL { Mat(Bool, 1, 1) }
+  | BYTE { Mat(Byte, 1, 1) }
   | STRUCT ID { Struct($2) }
   | PIPELINE ID { Pipeline($2) }
   | BUFFER LT typ GT { Buffer($3) }

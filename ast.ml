@@ -8,7 +8,7 @@ type uop = Neg | Not
 type base_type = Float | Int | Byte | Bool
 
 type typ =
-    Vec of base_type * int
+    Mat of base_type * int * int
   | Array of typ * int option
   | Struct of string
   | Buffer of typ
@@ -108,14 +108,18 @@ let string_of_uop = function
   | Not -> "!"
 
 let rec string_of_typ = function
-    Vec(Bool, 1) -> "bool"
-  | Vec(Int, 1) -> "int"
-  | Vec(Float, 1) -> "float"
-  | Vec(Byte, 1) -> "u8"
-  | Vec(Bool, w) -> "bvec" ^ string_of_int w
-  | Vec(Int, w) -> "ivec" ^ string_of_int w
-  | Vec(Float, w) -> "vec" ^ string_of_int w
-  | Vec(Byte, w) -> "u8vec" ^ string_of_int w
+    Mat(Bool, 1, 1) -> "bool"
+  | Mat(Int, 1, 1) -> "int"
+  | Mat(Float, 1, 1) -> "float"
+  | Mat(Byte, 1, 1) -> "u8"
+  | Mat(Bool, l, 1) -> "bvec" ^ string_of_int l
+  | Mat(Int, l, 1) -> "ivec" ^ string_of_int l
+  | Mat(Float, l, 1) -> "vec" ^ string_of_int l
+  | Mat(Byte, l, 1) -> "u8vec" ^ string_of_int l
+  | Mat(Bool, l, w) -> "bmat" ^ string_of_int l ^ string_of_int w
+  | Mat(Int, l, w) -> "imat" ^ string_of_int l ^ string_of_int w
+  | Mat(Float, l, w) -> "fmat" ^ string_of_int l ^ string_of_int w
+  | Mat(Byte, l, w) -> "u8mat" ^ string_of_int l ^ string_of_int w
   | Struct s -> "struct " ^ s
   | Pipeline p -> "pipeline " ^ p
   | Buffer t -> "buffer" ^ "<" ^ string_of_typ t ^ ">"
