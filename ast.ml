@@ -49,6 +49,7 @@ type formal_qualifier =
     In
   | Out
   | Inout
+  | Uniform
 
 type func_qualifier =
     GpuOnly
@@ -172,6 +173,7 @@ let string_of_formal_qual = function
     In -> ""
   | Out -> "out"
   | Inout -> "inout" 
+  | Uniform -> "uniform"
 
 let string_of_func_qual = function
     CpuOnly -> "@cpuonly"

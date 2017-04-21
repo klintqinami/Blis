@@ -7,6 +7,8 @@
 #endif
 #include <GLFW/glfw3.h> /* window creation and input handling crap */
 #include <stdbool.h> /* for true */
+#include <string.h>
+#include <assert.h>
 
 struct pipeline {
   GLuint vertex_array;
@@ -97,6 +99,135 @@ GLuint pipeline_get_vertex_buffer(struct pipeline *p, int location)
   glBindVertexArray(p->vertex_array);
   glGetVertexAttribIuiv(location, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &out);
   return out;
+} 
+
+int pipeline_get_uniform_location(struct pipeline *p, char *name)
+{
+  return glGetUniformLocation(p->program, name);
+}
+
+void pipeline_set_uniform_float(struct pipeline *p, int location,
+                                float *values, int rows, int cols)
+{
+  glUseProgram(p->program);
+  switch (cols) {
+    case 1:
+      switch (rows) {
+        case 1:
+          glUniform1fv(location, 1, values);
+          break;
+        case 2:
+          glUniform2fv(location, 1, values);
+          break;
+        case 3:
+          glUniform3fv(location, 1, values);
+          break;
+        case 4:
+          glUniform4fv(location, 1, values);
+          break;
+        default:
+          assert(!"unreachable");
+      }
+      break;
+    case 2:
+      switch (rows) {
+        case 1:
+          glUniform2fv(location, 1, values);
+          break;
+        case 2:
+          glUniformMatrix2fv(location, 1, false, values);
+          break;
+        case 3:
+          glUniformMatrix2x3fv(location, 1, false, values);
+          break;
+        case 4:
+          glUniformMatrix2x4fv(location, 1, false, values);
+          break;
+        default:
+          assert(!"unreachable");
+      }
+      break;
+    case 3:
+      switch (rows) {
+        case 1:
+          glUniform3fv(location, 1, values);
+          break;
+        case 2:
+          glUniformMatrix3x2fv(location, 1, false, values);
+          break;
+        case 3:
+          glUniformMatrix3fv(location, 1, false, values);
+          break;
+        case 4:
+          glUniformMatrix3x4fv(location, 1, false, values);
+          break;
+        default:
+          assert(!"unreachable");
+      }
+      break;
+    case 4:
+      switch (rows) {
+        case 1:
+          glUniform4fv(location, 1, values);
+          break;
+        case 2:
+          glUniformMatrix4x2fv(location, 1, false, values);
+          break;
+        case 3:
+          glUniformMatrix4x3fv(location, 1, false, values);
+          break;
+        case 4:
+          glUniformMatrix4fv(location, 1, false, values);
+          break;
+        default:
+          assert(!"unreachable");
+      }
+      break;
+    default:
+      assert(!"unreachable");
+  }
+}
+
+void pipeline_set_uniform_int(struct pipeline *p, int location,
+                              int *values, int rows, int cols)
+{
+  glUseProgram(p->program);
+  switch (cols) {
+    case 1:
+      switch (rows) {
+        case 1:
+          glUniform1iv(location, 1, values);
+          break;
+        case 2:
+          glUniform2iv(location, 1, values);
+          break;
+        case 3:
+          glUniform3iv(location, 1, values);
+          break;
+        case 4:
+          glUniform4iv(location, 1, values);
+          break;
+        default:
+          assert(!"unreachable");
+      }
+      break;
+    default:
+      assert(!"unreachable");
+  }
+}
+
+void pipeline_get_uniform_float(struct pipeline *p, int location,
+                                float *values)
+{
+  glUseProgram(p->program);
+  glGetUniformfv(p->program, location, values);
+}
+
+void pipeline_get_uniform_int(struct pipeline *p, int location,
+                              int *values)
+{
+  glUseProgram(p->program);
+  glGetUniformiv(p->program, location, values);
 }
 
 void bind_pipeline(struct pipeline *p)
@@ -173,5 +304,39 @@ void poll_events(void)
 bool should_close(GLFWwindow *window)
 {
   return glfwWindowShouldClose(window);
+}
+
+struct blis_string {
+  int size;
+  char *str; // note: NOT NUL-terminated
+};
+
+void read_file(struct blis_string *file, struct blis_string path)
+{
+  char *fpath = malloc(path.size + 1);
+  // Out-of-memory error? What error?
+  memcpy(fpath, path.str, path.size);
+  fpath[path.size] = '\0';
+
+  FILE *f = fopen(fpath, "r");
+  if (!f) {
+    fprintf(stderr, "couldn't open file %s\n", fpath);
+    exit(1);
+  }
+
+  fseek(f, 0, SEEK_END);
+  int fsize = ftell(f); // 2^31 ought to be large enough for everyone...
+  fseek(f, 0, SEEK_SET);
+
+  file->size = fsize;
+  file->str = malloc(fsize);
+  fread(file->str, fsize, 1, f);
+
+  fclose(f);
+}
+
+void print_string(struct blis_string str)
+{
+  fwrite(str.str, str.size, 1, stdout);
 }
 

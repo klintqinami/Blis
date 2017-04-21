@@ -49,6 +49,7 @@ type spipeline_decl = {
   sfshader : string;
   svshader : string;
   sinputs : bind list;
+  suniforms : bind list;
 }
 
 type sprogram = struct_decl list * spipeline_decl list * bind list * sfunc_decl list

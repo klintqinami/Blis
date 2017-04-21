@@ -77,6 +77,7 @@ rule token = parse
 | "in"  { IN }
 | "out" { OUT }
 | "inout" { INOUT }
+| "uniform" { UNIFORM }
 | digits as lxm { INT_LITERAL(int_of_string lxm) }
 | (digits exp | (digits '.' digits? | '.' digits) exp?) as lxm
   { FLOAT_LITERAL(float_of_string lxm) }

@@ -17,6 +17,7 @@ open Ast
 %token IN OUT INOUT
 %token <int> BOOL
 %token <int> BYTE
+%token IN OUT INOUT UNIFORM
 %token <int> FLOAT
 %token <int> INT
 %token <int> INT_LITERAL
@@ -113,7 +114,8 @@ formal_list:
 formal_qualifier:
     /* nothing */ { In }
   | OUT { Out }
-  | INOUT {Inout}
+  | INOUT { Inout }
+  | UNIFORM { Uniform }
   
 arrays:
     /* nothing */ { [] }

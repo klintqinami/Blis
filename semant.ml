@@ -201,6 +201,8 @@ let check program =
     let int1 = Mat(Int, 1, 1) and bool1 = Mat(Bool, 1, 1) and float1 =
         Mat(Float, 1, 1)
     and byte1 = Mat(Byte, 1, 1) in [
+     { typ = Void; fname = "print"; formals = [In, (Array(byte1, None), "x")];
+       fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printi"; formals = [In, (int1, "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printb"; formals = [In, (bool1, "x")];
@@ -222,6 +224,8 @@ let check program =
      { typ = Mat(Float, 4, 1); fname = "read_pixel";
        formals = [In, (int1, "x"); In, (int1, "y")];
        fqual = CpuOnly; body = [] };
+     { typ = Array(byte1, None); fname = "read_file";
+       formals = [In, (Array(byte1, None), "file")]; fqual = CpuOnly; body = [] };
     ]
   in
 
@@ -246,7 +250,7 @@ let check program =
     ()
   ;
 
-  (* Check pipeline shaders, and add inputs to pipeline declarations.
+  (* Do compile-time checks for consistency of pipeline declarations.
    * We want to do this after function_decls has been constructed.
    *)
 
@@ -269,11 +273,31 @@ let check program =
          ("fragment entrypoint " ^ pd.vshader ^ " in pipeline " ^ pd.pname ^
           "is not marked @fragment"))
       else
+        let decl_uniforms decl =
+          List.fold_left (fun map (qual, (typ, name)) ->
+            if qual <> Uniform then map else
+              StringMap.add name typ map) StringMap.empty decl.formals
+        in
+        let (vuniforms : typ StringMap.t) = decl_uniforms vert_decl in
+        let (funiforms : typ StringMap.t) = decl_uniforms frag_decl in
+        let uniforms = StringMap.merge (fun name vtyp ftyp -> match (vtyp, ftyp) with
+            (None, None) -> None
+          | (Some typ, None) -> Some typ
+          | (None, Some typ) -> Some typ
+          | (Some vtyp', Some ftyp') -> if vtyp' <> ftyp' then raise (Failure (
+              "differing types " ^ string_of_typ vtyp' ^ " and " ^
+              string_of_typ ftyp' ^ " for uniform " ^ name ^ " in pipeline " ^
+              pd.pname))
+            else Some vtyp') vuniforms funiforms in
+        let uniforms_list = List.map (fun (name, typ) -> (typ, name))
+          (StringMap.bindings uniforms) in
         { spname = pd.pname;
           sfshader = pd.fshader;
           svshader = pd.vshader;
           sinputs = List.map (fun (_, (t, n)) -> (Buffer(t), n))
-            (List.filter (fun (qual, _) -> qual = In) vert_decl.formals); })
+            (List.filter (fun (qual, _) -> qual = In) vert_decl.formals);
+          suniforms = uniforms_list;
+        })
   pipelines
   in
 
@@ -292,6 +316,19 @@ let check program =
     check_return_type
       (fun s -> s ^ " does not exist in return type of function " ^
       func.fname) func.typ;
+
+    (* checks related to uniform qualifiers *)
+    List.iter (fun (qual, (typ, name)) ->
+      if qual = Uniform then
+        if func.fqual != Vertex && func.fqual != Fragment then
+          raise (Failure ("uniform argument " ^ name ^ " declared in " ^
+            func.fname ^ " which is not an entrypoint"))
+        else
+          match typ with
+              Mat(_, _, 1) -> ()
+            | _ -> raise (Failure ("illegal type " ^ string_of_typ typ ^
+              " used in a uniform argument in " ^ func.fname)))
+    func.formals;
 
     report_duplicate (fun n -> "duplicate formal " ^ n ^ " in " ^ func.fname)
       (List.map (fun (_, (_, n)) -> n) func.formals);
@@ -343,8 +380,11 @@ let check program =
                 (try
                   fst (List.find (fun b -> snd b = m) ptype.sinputs)
                 with Not_found ->
-                  raise (Failure ("pipeline " ^ p ^ " does not contain input " ^
-                  m ^ " in " ^ string_of_expr d)))
+                  (try
+                    fst (List.find (fun b -> snd b = m) ptype.suniforms)
+                  with Not_found ->
+                    raise (Failure ("pipeline " ^ p ^ " does not contain " ^
+                      m ^ " in " ^ string_of_expr d))))
             | Mat(b, w, 1) ->
                 (match m with
                     "x" | "y" when w >= 2 -> Mat(b, 1, 1)
