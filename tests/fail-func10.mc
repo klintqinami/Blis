@@ -1,6 +1,10 @@
-int foo(int a, bool b, int c) { }
+int foo() {}
 
-void bar(int a, struct baz b, int c) {} /* Error: struct baz does not exist */
+void bar() {}
+
+int length() {} /* Should not be able to define length */
+
+void baz() {}
 
 int main()
 {

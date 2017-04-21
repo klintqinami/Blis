@@ -1,1 +1,1 @@
-Fatal error: exception Failure("struct baz does not exist for formal b in bar")
+Fatal error: exception Failure("function length may not be defined")
