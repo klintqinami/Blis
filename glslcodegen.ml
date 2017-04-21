@@ -134,9 +134,9 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       A.Mat(A.Int, 1, 1) | A.Mat(A.Byte, 1, 1) -> "int"
     | A.Mat(A.Float, 1, 1) -> "float"
     | A.Mat(A.Bool, 1, 1) -> "bool"
-    | A.Mat(A.Int, l, 1) | A.Mat(A.Byte, l, 1) -> "ivec" ^ string_of_int l
-    | A.Mat(A.Float, l, 1) -> "vec" ^ string_of_int l
-    | A.Mat(A.Bool, l, 1) -> "bvec" ^ string_of_int l
+    | A.Mat(A.Int, 1, l) | A.Mat(A.Byte, 1, l) -> "ivec" ^ string_of_int l
+    | A.Mat(A.Float, 1, l) -> "vec" ^ string_of_int l
+    | A.Mat(A.Bool, 1, l) -> "bvec" ^ string_of_int l
     | A.Mat(_, _, _) -> raise (Failure "unimplemented")
     | A.Struct(name) -> StringMap.find name struct_table.scope
     | A.Buffer(_) -> "dummy_struct"
@@ -206,7 +206,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       | SA.SId(n) -> StringMap.find n env.table.scope
       | SA.SStructDeref(e, mem) -> let e' = expr env e in
           (match fst e with
-              A.Mat(_, _, 1) -> "(" ^ e' ^ ")." ^ mem
+              A.Mat(_, 1, _) -> "(" ^ e' ^ ")." ^ mem
             | A.Struct(name) ->
                 let members = StringMap.find name struct_members in
                 let glsl_mem = StringMap.find mem members.scope in
@@ -234,7 +234,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
               SA.INeg | SA.FNeg -> "-"
             | SA.BNot -> "!") ^ "(" ^ expr env e ^ ")"
       | SA.STypeCons(elist) -> (match typ with
-          A.Mat(_, _, 1) | A.Array(_, _) ->
+          A.Mat(_, 1, _) | A.Array(_, _) ->
             let elist' = expr_list env elist
             in
             string_of_typ typ ^ "(" ^ elist' ^ ")"

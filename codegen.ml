@@ -86,10 +86,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
     StringMap.empty structs in
 
   let rec ltype_of_typ = function
-    | A.Mat(A.Float, l, 1) -> vec_t.(l-1)
-    | A.Mat(A.Int, l, 1) -> ivec_t.(l-1)
-    | A.Mat(A.Bool, l, 1) -> bvec_t.(l-1)
-    | A.Mat(A.Byte, l, 1) -> byte_vec_t.(l-1)
+    | A.Mat(A.Float, 1, l) -> vec_t.(l-1)
+    | A.Mat(A.Int, 1, l) -> ivec_t.(l-1)
+    | A.Mat(A.Bool, 1, l) -> bvec_t.(l-1)
+    | A.Mat(A.Byte, 1, l) -> byte_vec_t.(l-1)
     | A.Mat(_, _, _) -> raise (Failure "unimplemented")
     | A.Struct s -> StringMap.find s struct_types
     | A.Array(t, Some s) -> L.array_type (ltype_of_typ t) s
@@ -273,7 +273,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 L.build_struct_gep e'
                   (index_of m (List.map snd decl.A.members))
                   "tmp" builder
-            | A.Mat (_, _, 1) ->
+            | A.Mat (_, 1, _) ->
                 L.build_gep e' [|izero; L.const_int i32_t (match m with
                     "x" -> 0
                   | "y" -> 1
@@ -299,7 +299,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
 
     and handle_assign builder l r =
       match l with
-          (A.Buffer(A.Mat(A.Float, comp, 1)), SA.SStructDeref((A.Pipeline(p), _) as e, m)) ->
+          (A.Buffer(A.Mat(A.Float, 1, comp)), SA.SStructDeref((A.Pipeline(p), _) as e, m)) ->
             let pdecl = StringMap.find p pipeline_decls in
             let location = index_of m (List.map snd pdecl.SA.sinputs) in
             let lval' = lvalue builder e in
@@ -307,7 +307,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
             ignore (L.build_call pipeline_bind_vertex_buffer_func [|
               lval'; e'; L.const_int i32_t comp; L.const_int i32_t location |]
               "" builder)
-        | (A.Mat(b, n, c), SA.SStructDeref((A.Pipeline(_), _) as e, m)) ->
+        | (A.Mat(b, c, n), SA.SStructDeref((A.Pipeline(_), _) as e, m)) ->
             let lval' = lvalue builder e in
             let e' = lvalue builder r in
             let loc = L.build_call pipeline_get_uniform_location_func [|
@@ -398,7 +398,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
           | SA.BNot     -> L.build_not) e' "tmp" builder
       | SA.STypeCons act ->
           match fst sexpr with
-              A.Mat(_, _, 1) | A.Array(_, Some _) ->
+              A.Mat(_, 1, _) | A.Array(_, Some _) ->
                 fst (List.fold_left (fun (agg, idx) e ->
                   let e' = expr builder e in
                   (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))
@@ -481,9 +481,9 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SCall (_, "upload_buffer", [buf; data]) ->
           let buf' = expr builder buf in
           let data', size = (match (fst data) with
-            A.Array(A.Mat(A.Float, s, 1), Some n) ->
+            A.Array(A.Mat(A.Float, 1, s), Some n) ->
               (lvalue builder data, L.const_int i32_t (4 * s * n))
-          | A.Array(A.Mat(A.Float, n, 1), None) -> let s = expr builder data in
+          | A.Array(A.Mat(A.Float, 1, n), None) -> let s = expr builder data in
               (L.build_extractvalue s 1 "" builder,
               L.build_mul (L.const_int i32_t (4 * n))
               (L.build_extractvalue s 0 "" builder) "" builder)

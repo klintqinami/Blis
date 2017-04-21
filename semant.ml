@@ -93,7 +93,7 @@ let check program =
   in
 
   let check_buffer_type = function
-      Mat(Float, _, 1) -> ()
+      Mat(Float, 1, _) -> ()
     | _ as t -> raise (Failure ("bad type " ^ string_of_typ t ^ " for buffer"))
   in
 
@@ -221,7 +221,7 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = bool1; fname = "window_should_close";
        formals = [In, (Window, "w")]; fqual = CpuOnly; body = [] };
-     { typ = Mat(Float, 4, 1); fname = "read_pixel";
+     { typ = Mat(Float, 1, 4); fname = "read_pixel";
        formals = [In, (int1, "x"); In, (int1, "y")];
        fqual = CpuOnly; body = [] };
      { typ = Array(byte1, None); fname = "read_file";
@@ -325,7 +325,7 @@ let check program =
             func.fname ^ " which is not an entrypoint"))
         else
           match typ with
-              Mat(_, _, 1) -> ()
+              Mat(_, 1, _) -> ()
             | _ -> raise (Failure ("illegal type " ^ string_of_typ typ ^
               " used in a uniform argument in " ^ func.fname)))
     func.formals;
@@ -385,7 +385,7 @@ let check program =
                   with Not_found ->
                     raise (Failure ("pipeline " ^ p ^ " does not contain " ^
                       m ^ " in " ^ string_of_expr d))))
-            | Mat(b, w, 1) ->
+            | Mat(b, 1, w) ->
                 (match m with
                     "x" | "y" when w >= 2 -> Mat(b, 1, 1)
                   | "z" when w >= 3 -> Mat(b, 1, 1)
@@ -602,7 +602,7 @@ let check program =
                * anyways.
                *)
             | Struct s -> expr env stmts (Call(s, actuals))
-            | Mat(b, w, 1) -> handle_array_vec (Mat(b, 1, 1)) w
+            | Mat(b, 1, w) -> handle_array_vec (Mat(b, 1, 1)) w
             | Array(t, Some s) -> handle_array_vec t s
             | Array(_, None) -> check_cons [Mat(Int, 1, 1)]
             | Buffer(t) -> check_buffer_type t; check_cons []
@@ -693,7 +693,7 @@ let check program =
 
     (* check return type of shaders *)
     (match func.fqual with
-        Vertex -> if func.typ <> Mat(Float, 4, 1) then
+        Vertex -> if func.typ <> Mat(Float, 1, 4) then
           raise (Failure ("vertex entrypoint " ^ func.fname ^
             " must return vec4"))
         else

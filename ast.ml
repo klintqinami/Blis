@@ -113,14 +113,14 @@ let rec string_of_typ = function
   | Mat(Int, 1, 1) -> "int"
   | Mat(Float, 1, 1) -> "float"
   | Mat(Byte, 1, 1) -> "u8"
-  | Mat(Bool, l, 1) -> "bvec" ^ string_of_int l
-  | Mat(Int, l, 1) -> "ivec" ^ string_of_int l
-  | Mat(Float, l, 1) -> "vec" ^ string_of_int l
-  | Mat(Byte, l, 1) -> "u8vec" ^ string_of_int l
-  | Mat(Bool, l, w) -> "bmat" ^ string_of_int l ^ string_of_int w
-  | Mat(Int, l, w) -> "imat" ^ string_of_int l ^ string_of_int w
-  | Mat(Float, l, w) -> "fmat" ^ string_of_int l ^ string_of_int w
-  | Mat(Byte, l, w) -> "u8mat" ^ string_of_int l ^ string_of_int w
+  | Mat(Bool, 1, l) -> "bvec" ^ string_of_int l
+  | Mat(Int, 1, l) -> "ivec" ^ string_of_int l
+  | Mat(Float, 1, l) -> "vec" ^ string_of_int l
+  | Mat(Byte, 1, l) -> "u8vec" ^ string_of_int l
+  | Mat(Bool, w, l) -> "bmat" ^ string_of_int w ^ string_of_int l
+  | Mat(Int, w, l) -> "imat" ^ string_of_int w ^ string_of_int l
+  | Mat(Float, w, l) -> "fmat" ^ string_of_int w ^ string_of_int l
+  | Mat(Byte, w, l) -> "u8mat" ^ string_of_int w ^ string_of_int l
   | Struct s -> "struct " ^ s
   | Pipeline p -> "pipeline " ^ p
   | Buffer t -> "buffer" ^ "<" ^ string_of_typ t ^ ">"
