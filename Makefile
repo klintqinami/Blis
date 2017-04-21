@@ -5,7 +5,7 @@
 # Easiest way to build: using ocamlbuild, which in turn uses ocamlfind
 
 .PHONY: all
-all: microc.native runtime.o
+all: microc.native microc.d.byte runtime.o
 
 
 runtime.o: runtime.c
@@ -15,6 +15,12 @@ runtime.o: runtime.c
 microc.native :
 	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis -tag thread -cflags -w,+a-4 \
 		microc.native
+
+
+.PHONY : microc.d.byte
+microc.d.byte :
+	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis -tag thread -cflags -w,+a-4 \
+		microc.d.byte
 
 # "make clean" removes all generated files
 
