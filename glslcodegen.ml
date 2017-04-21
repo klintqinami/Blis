@@ -193,33 +193,29 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
   in
 
   let rec translate_stmts env slist =
-    let rec expr env stmts (typ, e) = match e with
-        SA.SIntLit(i) -> (env, stmts, string_of_int i)
-      | SA.SFloatLit(f) -> (env, stmts, string_of_float f)
-      | SA.SBoolLit(b) -> (env, stmts, if b then "true" else "false")
-      | SA.SCharLit(c) -> (env, stmts, string_of_int (Char.code c))
-      | SA.SStringLit(s) -> (env, stmts,
+    let rec expr env (typ, e) = match e with
+        SA.SIntLit(i) -> string_of_int i
+      | SA.SFloatLit(f) -> string_of_float f
+      | SA.SBoolLit(b) -> if b then "true" else "false"
+      | SA.SCharLit(c) -> string_of_int (Char.code c)
+      | SA.SStringLit(s) ->
           "int[" ^ string_of_int (String.length s) ^ "](" ^
             String.concat ", "
               (List.map (fun c -> string_of_int (Char.code c)) (explode s)) ^
-            ")")
-      | SA.SId(n) -> (env, stmts, StringMap.find n env.table.scope)
-      | SA.SStructDeref(e, mem) -> let env, stmts, e' = expr env stmts e in
+            ")"
+      | SA.SId(n) -> StringMap.find n env.table.scope
+      | SA.SStructDeref(e, mem) -> let e' = expr env e in
           (match fst e with
-              A.Vec(_, _) -> (env, stmts, "(" ^ e' ^ ")." ^ mem)
+              A.Vec(_, _) -> "(" ^ e' ^ ")." ^ mem
             | A.Struct(name) ->
                 let members = StringMap.find name struct_members in
                 let glsl_mem = StringMap.find mem members.scope in
-                (env, stmts, "(" ^ e' ^ ")." ^ glsl_mem)
+                "(" ^ e' ^ ")." ^ glsl_mem
             | _ -> raise (Failure "unimplemented"))
       | SA.SArrayDeref(e, idx) ->
-          let env, stmts, e' = expr env stmts e in
-          let env, stmts, idx' = expr env stmts idx in
-          (env, stmts, "(" ^ e' ^ ")[" ^ idx' ^ "]")
+          "(" ^ expr env e ^ ")[" ^ expr env idx ^ "]"
       | SA.SBinop(e1, op, e2) ->
-          let env, stmts, e1' = expr env stmts e1 in
-          let env, stmts, e2' = expr env stmts e2 in
-          (env, stmts, "(" ^ e1' ^ ") " ^ (match op with
+          "(" ^ expr env e1 ^ ") " ^ (match op with
               SA.IAdd | SA.FAdd -> "+"
             | SA.ISub | SA.FSub -> "-"
             | SA.IMult | SA.FMult -> "*"
@@ -231,71 +227,63 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
             | SA.IGeq | SA.FGeq -> ">="
             | SA.ILeq | SA.FLeq -> "<="
             | SA.BAnd -> "&&"
-            | SA.BOr -> "||") ^ " (" ^ e2' ^ ")")
-      | SA.SUnop(op, e) -> let env, stmts, e' = expr env stmts e in
-          (env, stmts, (match op with
+            | SA.BOr -> "||") ^
+          " (" ^ expr env e2 ^ ")"
+      | SA.SUnop(op, e) ->
+          (match op with
               SA.INeg | SA.FNeg -> "-"
-            | SA.BNot -> "!") ^ "(" ^ e' ^ ")")
+            | SA.BNot -> "!") ^ "(" ^ expr env e ^ ")"
       | SA.STypeCons(elist) -> (match typ with
           A.Vec(_, _) | A.Array(_, _) ->
-            let env, stmts, elist' = expr_list env stmts elist
+            let elist' = expr_list env elist
             in
-            (env, stmts, string_of_typ typ ^ "(" ^ elist' ^ ")")
+            string_of_typ typ ^ "(" ^ elist' ^ ")"
         | _ -> raise (Failure ("unexpected type constructor for " ^
                 string_of_typ typ)))
-      | SA.SNoexpr -> (env, stmts, "")
+      | SA.SNoexpr -> ""
 
-    and expr_list env stmts elist =
+    and expr_list env elist =
       (* handle lists for e.g. function arguments *)
-      List.fold_left (fun (env, stmts, elist) e ->
-        let env, stmts, e' = expr env stmts e in
-        (env, stmts, if elist = "" then e' else elist ^ ", " ^ e'))
-      (env, stmts, "") elist
+      String.concat ", " (List.map (expr env) elist)
     in
         
-    let stmt (env, stmts) = function
+    let stmt env = function
         SA.SAssign(l, r) ->
-          let env, stmts, l' = expr env stmts l in
-          let env, stmts, r' = expr env stmts r in
-          (env, stmts ^ "(" ^ l' ^ ") = (" ^ r' ^ ");\n")
+          let l' = expr env l in
+          let r' = expr env r in
+          "(" ^ l' ^ ") = (" ^ r' ^ ");\n"
       | SA.SCall((A.Void, SA.SNoexpr), name, elist) ->
-          let env, stmts, elist' = expr_list env stmts elist
+          let elist' = expr_list env elist
           in
-          (env, stmts ^
-           StringMap.find name func_table.scope ^ "(" ^ elist' ^ ");\n")
+           StringMap.find name func_table.scope ^ "(" ^ elist' ^ ");\n"
       | SA.SCall(ret, name, elist) ->
-          let env, stmts, elist' = expr_list env stmts elist
+          let elist' = expr_list env elist
           in
-          let env, stmts, ret = expr env stmts ret
+          let ret = expr env ret
           in
-          (env, stmts ^
            ret ^ " = " ^ StringMap.find name func_table.scope ^ "(" ^ elist' ^
-           ");\n")
-      | SA.SReturn(e) -> let env, stmts, e' = expr env stmts e in
+           ");\n"
+      | SA.SReturn(e) -> let e' = expr env e in
           if env.cur_qualifier = A.Vertex then
-            (env, stmts ^ "gl_Position = " ^ e' ^ ";\nreturn;\n")
+            "gl_Position = " ^ e' ^ ";\nreturn;\n"
           else
-            (env, stmts ^ "return " ^ e' ^ ";\n")
+            "return " ^ e' ^ ";\n"
       | SA.SIf(predicate, then_stmts, else_stmts) ->
-          let env, stmts, pred = expr env stmts predicate in
-          let then_string = translate_stmts env then_stmts in
-          let else_string = translate_stmts env else_stmts in
-          (env, stmts ^
-           "if (" ^ pred ^ ") {\n" ^
-              then_string ^
-           "} else {\n" ^
-              else_string ^
-           "}\n")
+          "if (" ^ expr env predicate ^ ") {\n" ^
+            translate_stmts env then_stmts ^
+          "} else {\n" ^
+            translate_stmts env else_stmts ^
+          "}\n"
       | SA.SLoop(body, continue) ->
           let continue' = translate_stmts env continue in
           let env' = { env with forloop_update_statement = continue' } in
           let body' = translate_stmts env' body in
-          (env, stmts ^ "while (true) {\n" ^ body' ^ continue' ^ "}\n")
-      | SA.SBreak -> (env, stmts ^ "break;\n")
-      | SA.SContinue -> (env, stmts ^ env.forloop_update_statement ^ "continue;\n")
+          "while (true) {\n" ^ body' ^ continue' ^ "}\n"
+      | SA.SBreak -> "break;\n"
+      | SA.SContinue -> env.forloop_update_statement ^ "continue;\n"
     in
 
-    snd (List.fold_left stmt (env, "") slist)
+    String.concat "" (List.map (stmt env) slist)
 
   in
 
