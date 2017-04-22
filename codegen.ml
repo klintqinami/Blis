@@ -385,6 +385,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
 	  | SA.FLeq     -> L.build_fcmp L.Fcmp.Ole
 	  | SA.FGreater -> L.build_fcmp L.Fcmp.Ogt
 	  | SA.FGeq     -> L.build_fcmp L.Fcmp.Oge
+          | SA.U8Equal  -> L.build_icmp L.Icmp.Eq
+          | SA.U8Neq    -> L.build_icmp L.Icmp.Ne
 	  | SA.BAnd     -> L.build_and
 	  | SA.BOr      -> L.build_or
 	  | SA.BEqual   -> L.build_icmp L.Icmp.Eq

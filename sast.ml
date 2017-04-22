@@ -6,6 +6,7 @@ type sop = IAdd | ISub | IMult | IDiv
          | IEqual | INeq | ILess | ILeq | IGreater | IGeq
          | FAdd | FSub | FMult | FDiv
          | FEqual | FNeq | FLess | FLeq | FGreater | FGeq
+         | U8Equal | U8Neq
          | BAnd | BOr | BEqual | BNeq
 
 type suop = INeg | FNeg | BNot
@@ -84,8 +85,8 @@ let string_of_sop = function
   | ISub | FSub -> "-"
   | IMult | FMult -> "*"
   | IDiv | FDiv -> "/"
-  | IEqual | BEqual | FEqual -> "=="
-  | INeq | BNeq | FNeq -> "!="
+  | IEqual | BEqual | FEqual | U8Equal -> "=="
+  | INeq | BNeq | FNeq | U8Neq -> "!="
   | ILess | FLess -> "<"
   | ILeq | FLeq -> "<="
   | IGreater | FGreater -> ">"

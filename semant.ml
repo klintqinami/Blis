@@ -465,6 +465,10 @@ let check program =
           | Geq when t1 = Mat(Int, 1, 1) && t2 = Mat(Int, 1, 1) -> (Mat(Bool, 1, 1), IGeq)
           | And when t1 = Mat(Bool, 1, 1) && t2 = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BAnd)
           | Or when t1 = Mat(Bool, 1, 1) && t2 = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BOr)
+          | Equal when t1 = Mat(Byte, 1, 1) && t2 = Mat(Byte, 1, 1) ->
+              (Mat(Bool, 1, 1), U8Equal)
+          | Neq when t1 = Mat(Byte, 1, 1) && t2 = Mat(Byte, 1, 1) ->
+              (Mat(Bool, 1, 1), U8Neq)
           | _ -> raise (Failure ("illegal binary operator " ^
                 string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
                 string_of_typ t2 ^ " in " ^ string_of_expr e))
