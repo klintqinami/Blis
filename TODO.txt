@@ -13,4 +13,5 @@ Broken things:
 Wishlist:
 - multi-dimensional arrays
 - images, textures, framebuffers
+- boolean matrices in GLSL
 

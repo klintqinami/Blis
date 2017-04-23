@@ -29,6 +29,8 @@ let index_of e l =
   in
 index_of' 0 l
 
+(* Why is this not a stdlib function? *)
+let rec range i j = if i >= j then [] else i :: (range (i+1) j) 
 
 let translate ((structs, pipelines, globals, functions) as program) =
   let shaders = G.translate program in
@@ -375,23 +377,48 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SId _ | SA.SStructDeref (_, _) | SA.SArrayDeref (_, _) ->
           L.build_load (lvalue builder sexpr) "load_tmp" builder
       | SA.SBinop (e1, op, e2) ->
-	  let e1' = expr builder e1
+          let e1' = expr builder e1
 	  and e2' = expr builder e2 in
+          let base_type, cols, rows = match fst sexpr with
+                | A.Mat(b, w, l) -> b, w, l 
+                | _ -> raise (Failure "shouldn't get here");
+          in
+          let per_component_builder_vec op vec1 vec2 str builder = 
+            List.fold_left (fun acc row -> 
+              let val1 = L.build_extractvalue vec1 row str builder in
+              let val2 = L.build_extractvalue vec2 row str builder in
+              L.build_insertvalue acc (op val1 val2 str builder) row str builder)
+              (L.undef (ltype_of_typ (A.Mat(base_type, 1, rows)))) (range 0 rows)
+          in
+          let per_component_builder_mat op mat1 mat2 str builder = 
+            List.fold_left (fun acc col -> 
+              let vec1' = L.build_extractvalue mat1 col str builder in
+              let vec2' = L.build_extractvalue mat2 col str builder in
+              L.build_insertvalue acc (per_component_builder_vec op vec1'
+                vec2' str builder) col str builder) 
+              (L.undef (ltype_of_typ (fst sexpr))) (range 0 cols)
+          in
+          let per_component_builder op e1'' e2'' str builder = 
+            if rows = 1 && cols = 1 then op e1'' e2'' str builder
+            else if rows = 1 || cols = 1 then per_component_builder_vec op e1''
+                e2'' str builder
+            else per_component_builder_mat op e1'' e2'' str builder
+          in
 	  (match op with
-	    SA.IAdd     -> L.build_add
-	  | SA.ISub     -> L.build_sub
-	  | SA.IMult    -> L.build_mul
-          | SA.IDiv     -> L.build_sdiv
+	    SA.IAdd     -> per_component_builder L.build_add
+	  | SA.ISub     -> per_component_builder L.build_sub
+	  | SA.IMult    -> per_component_builder L.build_mul
+          | SA.IDiv     -> per_component_builder L.build_sdiv
 	  | SA.IEqual   -> L.build_icmp L.Icmp.Eq
 	  | SA.INeq     -> L.build_icmp L.Icmp.Ne
 	  | SA.ILess    -> L.build_icmp L.Icmp.Slt
 	  | SA.ILeq     -> L.build_icmp L.Icmp.Sle
 	  | SA.IGreater -> L.build_icmp L.Icmp.Sgt
 	  | SA.IGeq     -> L.build_icmp L.Icmp.Sge
-          | SA.FAdd     -> L.build_fadd
-          | SA.FSub     -> L.build_fsub
-          | SA.FMult    -> L.build_fmul
-          | SA.FDiv     -> L.build_fdiv
+          | SA.FAdd     -> per_component_builder L.build_fadd
+          | SA.FSub     -> per_component_builder L.build_fsub
+          | SA.FMult    -> per_component_builder L.build_fmul
+          | SA.FDiv     -> per_component_builder L.build_fdiv
 	  | SA.FEqual   -> L.build_fcmp L.Fcmp.Oeq
 	  | SA.FNeq     -> L.build_fcmp L.Fcmp.One
 	  | SA.FLess    -> L.build_fcmp L.Fcmp.Olt

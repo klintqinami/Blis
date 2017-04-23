@@ -447,16 +447,26 @@ let check program =
         let env, stmts, e2 = expr env stmts e2 in
         let t1 = fst e1 and t2 = fst e2 in
         let typ, op = (match op, t1, t2 with
-          | Add,     Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Int, 1, 1), IAdd)
-          | Sub,     Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Int, 1, 1), ISub)
-          | Mult,    Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Int, 1, 1), IMult)
-          | Div,     Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Int, 1, 1), IDiv)
+          | Add,     Mat(Int, 1, l),   Mat(Int, 1, l') when l = l'   
+                     -> (Mat(Int, 1, l), IAdd)
+          | Sub,     Mat(Int, 1, l),   Mat(Int, 1, l') when l = l'  
+                     -> (Mat(Int, 1, l), ISub)
+          | Mult,    Mat(Int, 1, l),   Mat(Int, 1, l') when l = l'
+                     -> (Mat(Int, 1, l), IMult)
+          | Div,     Mat(Int, 1, l),   Mat(Int, 1, l') when l = l'  
+                     -> (Mat(Int, 1, l), IDiv)
           | Equal,   Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), IEqual)
           | Neq,     Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), INeq)
-          | Add,     Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FAdd)
-          | Sub,     Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FSub)
-          | Mult,    Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FMult)
-          | Div,     Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FDiv)
+          | Add,     Mat(Float, w, l), Mat(Float, w', l') when w = w' && l = l'
+                     -> (Mat(Float, w, l), FAdd)
+          | Sub,     Mat(Float, w, l), Mat(Float, w', l') when w = w' && l = l' 
+                     -> (Mat(Float, w, l), FSub)
+          | Mult,    Mat(Float, 1, l), Mat(Float, 1, l')  when l = l' 
+                     -> (Mat(Float, 1, l), FMult)
+          (*| Mult,    Mat(Float, w, l), Mat(Float, w', l') when w = w' && l = l'
+                     -> (Mat(Float, w, l), FMatMult)*)
+          | Div,     Mat(Float, 1, l), Mat(Float, 1, l') when l = l'
+                     -> (Mat(Float, 1, l), FDiv)
           | Equal,   Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FEqual)
           | Neq,     Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FNeq)
           | Less,    Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FLess)
