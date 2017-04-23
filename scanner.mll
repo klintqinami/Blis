@@ -40,13 +40,13 @@ rule token = parse
 | "break"  { BREAK }
 | "continue" { CONTINUE }
 | "int"    { INT(1) }
-| "float"  { FLOAT(1) }
+| "float"  { FLOAT(1, 1) }
 | "vec" (digits as width) {
   let width = int_of_string width in
   if width < 2 || width > 4 then
     raise (Failure("vecN with N not between 2 and 4"))
   else
-    FLOAT(width) }
+    FLOAT(1, width) }
 | "ivec" (digits as width) {
   let width = int_of_string width in
   if width < 2 || width > 4 then
@@ -67,6 +67,15 @@ rule token = parse
     raise (Failure("u8vecN with N not between 2 and 4"))
   else
     BYTE(width) }
+| "mat" (digits as w) "x" (digits as l) {
+    let w = int_of_string w in 
+    let l = int_of_string l in
+    if (w < 1 || w > 4) then 
+        raise (Failure("mat width not between 1 and 4"))
+    else if (l < 1 || l > 4) then
+        raise (Failure("mat length not between 1 and 4"))
+    else
+        FLOAT(w, l) }
 | "window" { WINDOW }
 | "buffer" { BUFFER }
 | "pipeline" { PIPELINE }

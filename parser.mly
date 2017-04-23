@@ -18,7 +18,7 @@ open Ast
 %token <int> BOOL
 %token <int> BYTE
 %token IN OUT INOUT UNIFORM
-%token <int> FLOAT
+%token <int * int> FLOAT
 %token <int> INT
 %token <int> INT_LITERAL
 %token <float> FLOAT_LITERAL
@@ -124,7 +124,7 @@ arrays:
 
 no_array_typ:
     INT { Mat(Int, 1, $1) }
-  | FLOAT { Mat(Float, 1, $1) }
+  | FLOAT { Mat(Float, fst $1, snd $1) }
   | BOOL { Mat(Bool, 1, $1) }
   | BYTE { Mat(Byte, 1, $1) }
   | STRUCT ID { Struct($2) }

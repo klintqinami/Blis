@@ -117,10 +117,10 @@ let rec string_of_typ = function
   | Mat(Int, 1, l) -> "ivec" ^ string_of_int l
   | Mat(Float, 1, l) -> "vec" ^ string_of_int l
   | Mat(Byte, 1, l) -> "u8vec" ^ string_of_int l
-  | Mat(Bool, w, l) -> "bmat" ^ string_of_int w ^ string_of_int l
-  | Mat(Int, w, l) -> "imat" ^ string_of_int w ^ string_of_int l
-  | Mat(Float, w, l) -> "fmat" ^ string_of_int w ^ string_of_int l
-  | Mat(Byte, w, l) -> "u8mat" ^ string_of_int w ^ string_of_int l
+  | Mat(Bool, w, l) -> "bmat" ^ string_of_int w ^ "x" ^ string_of_int l
+  | Mat(Int, w, l) -> "imat" ^ string_of_int w ^ "x" ^ string_of_int l
+  | Mat(Float, w, l) -> "mat" ^ string_of_int w ^ "x" ^ string_of_int l
+  | Mat(Byte, w, l) -> "u8mat" ^ string_of_int w ^ "x" ^ string_of_int l
   | Struct s -> "struct " ^ s
   | Pipeline p -> "pipeline " ^ p
   | Buffer t -> "buffer" ^ "<" ^ string_of_typ t ^ ">"

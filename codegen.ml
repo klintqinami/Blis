@@ -55,11 +55,24 @@ let translate ((structs, pipelines, globals, functions) as program) =
              L.array_type base 4 |]
   in
 
+  let make_n_t base n =
+      [| L.array_type base n; 
+         L.array_type (L.array_type base 2) n;
+         L.array_type (L.array_type base 3) n;
+         L.array_type (L.array_type base 4) n
+      |]
+  in
+
+  let make_mat_t base = 
+      [| make_vec_t base; make_n_t base 2;
+         make_n_t base 3; make_n_t base 4 |]
+  in
 
   let vec_t = make_vec_t f32_t in
   let ivec_t = make_vec_t i32_t in
   let bvec_t = make_vec_t i1_t in
   let byte_vec_t = make_vec_t i8_t in
+  let mat_t = make_mat_t f32_t in
 
   let izero = L.const_int i32_t 0 in
 
@@ -86,10 +99,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
     StringMap.empty structs in
 
   let rec ltype_of_typ = function
-    | A.Mat(A.Float, 1, l) -> vec_t.(l-1)
     | A.Mat(A.Int, 1, l) -> ivec_t.(l-1)
     | A.Mat(A.Bool, 1, l) -> bvec_t.(l-1)
     | A.Mat(A.Byte, 1, l) -> byte_vec_t.(l-1)
+    | A.Mat(A.Float, w, l) -> mat_t.(w-1).(l-1) 
     | A.Mat(_, _, _) -> raise (Failure "unimplemented")
     | A.Struct s -> StringMap.find s struct_types
     | A.Array(t, Some s) -> L.array_type (ltype_of_typ t) s
@@ -273,7 +286,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 L.build_struct_gep e'
                   (index_of m (List.map snd decl.A.members))
                   "tmp" builder
-            | A.Mat (_, 1, _) ->
+            | A.Mat (_, _, _) ->
                 L.build_gep e' [|izero; L.const_int i32_t (match m with
                     "x" -> 0
                   | "y" -> 1
@@ -400,7 +413,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
           | SA.BNot     -> L.build_not) e' "tmp" builder
       | SA.STypeCons act ->
           match fst sexpr with
-              A.Mat(_, 1, _) | A.Array(_, Some _) ->
+              A.Mat(_, _, _) | A.Array(_, Some _) ->
                 fst (List.fold_left (fun (agg, idx) e ->
                   let e' = expr builder e in
                   (L.build_insertvalue agg e' idx "tmp" builder, idx + 1))

@@ -402,6 +402,13 @@ let check program =
                   | "w" when w = 4 -> Mat(b, 1, 1)
                   | _ -> raise (Failure ("dereference of nonexistant member " ^ m ^
                       " of a vector")))
+            | Mat(b, w, l) ->
+                 (match m with
+                    "x" | "y" when w >= 2 -> Mat(b, 1, l)
+                  | "z" when w >= 3 -> Mat(b, 1, l) 
+                  | "w" when w = 4 -> Mat(b, 1, l)
+                  | _ -> raise (Failure ("dereference of nonexistant member " ^ m ^
+                      " of a matrix"))) 
             | _ -> raise (Failure ("illegal dereference of type " ^
                 string_of_typ typ ^ " in " ^ string_of_expr d)))
           , SStructDeref(e', m))
@@ -617,6 +624,7 @@ let check program =
                *)
             | Struct s -> expr env stmts (Call(s, actuals))
             | Mat(b, 1, w) -> handle_array_vec (Mat(b, 1, 1)) w
+            | Mat(b, w, l) -> handle_array_vec (Mat(b, 1, l)) w
             | Array(t, Some s) -> handle_array_vec t s
             | Array(_, None) -> check_cons [Mat(Int, 1, 1)]
             | Buffer(t) -> check_buffer_type t; check_cons []
