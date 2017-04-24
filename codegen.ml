@@ -419,6 +419,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
           | SA.FSub     -> per_component_builder L.build_fsub
           | SA.FMult    -> per_component_builder L.build_fmul
           | SA.FDiv     -> per_component_builder L.build_fdiv
+          | SA.FMatMult -> raise (Failure "to be implemented")
 	  | SA.FEqual   -> L.build_fcmp L.Fcmp.Oeq
 	  | SA.FNeq     -> L.build_fcmp L.Fcmp.One
 	  | SA.FLess    -> L.build_fcmp L.Fcmp.Olt
@@ -434,10 +435,31 @@ let translate ((structs, pipelines, globals, functions) as program) =
 	  ) e1' e2' "tmp" builder
       | SA.SUnop(op, e) ->
 	  let e' = expr builder e in
+          let base_type, cols, rows = match fst sexpr with
+                | A.Mat(b, w, l) -> b, w, l 
+                | _ -> raise (Failure "shouldn't get here");
+          in
+          let per_component_builder_vec op vec str builder = 
+            List.fold_left (fun acc row -> 
+              let val1 = L.build_extractvalue vec row str builder in
+              L.build_insertvalue acc (op val1 str builder) row str builder)
+              (L.undef (ltype_of_typ (A.Mat(base_type, 1, rows)))) (range 0 rows)
+          in
+          let per_component_builder_mat op mat str builder = 
+            List.fold_left (fun acc col -> 
+              let vec' = L.build_extractvalue mat col str builder in
+              L.build_insertvalue acc (per_component_builder_vec op vec' str builder) col str builder) 
+              (L.undef (ltype_of_typ (fst sexpr))) (range 0 cols)
+          in
+          let per_component_builder op e'' str builder = 
+            if rows = 1 && cols = 1 then op e'' str builder
+            else if rows = 1 || cols = 1 then per_component_builder_vec op e'' str builder
+            else per_component_builder_mat op e'' str builder
+          in
 	  (match op with
-	    SA.INeg     -> L.build_neg
-	  | SA.FNeg     -> L.build_fneg
-          | SA.BNot     -> L.build_not) e' "tmp" builder
+	    SA.INeg     -> per_component_builder L.build_neg
+	  | SA.FNeg     -> per_component_builder L.build_fneg
+          | SA.BNot     -> per_component_builder L.build_not) e' "tmp" builder
       | SA.STypeCons act ->
           match fst sexpr with
               A.Mat(_, _, _) | A.Array(_, Some _) ->

@@ -4,7 +4,7 @@ open Ast
 
 type sop = IAdd | ISub | IMult | IDiv
          | IEqual | INeq | ILess | ILeq | IGreater | IGeq
-         | FAdd | FSub | FMult | FDiv
+         | FAdd | FSub | FMult | FDiv | FMatMult
          | FEqual | FNeq | FLess | FLeq | FGreater | FGeq
          | U8Equal | U8Neq
          | BAnd | BOr | BEqual | BNeq
@@ -83,7 +83,7 @@ let fold_sfdecl_pre f a sfdecl =
 let string_of_sop = function
     IAdd | FAdd -> "+"
   | ISub | FSub -> "-"
-  | IMult | FMult -> "*"
+  | IMult | FMult | FMatMult -> "*"
   | IDiv | FDiv -> "/"
   | IEqual | BEqual | FEqual | U8Equal -> "=="
   | INeq | BNeq | FNeq | U8Neq -> "!="

@@ -463,8 +463,8 @@ let check program =
                      -> (Mat(Float, w, l), FSub)
           | Mult,    Mat(Float, 1, l), Mat(Float, 1, l')  when l = l' 
                      -> (Mat(Float, 1, l), FMult)
-          (*| Mult,    Mat(Float, w, l), Mat(Float, w', l') when w = w' && l = l'
-                     -> (Mat(Float, w, l), FMatMult)*)
+          | Mult,    Mat(Float, w, l), Mat(Float, w', l') when w = l' && l = w'
+                     -> (Mat(Float, w', l), FMatMult)
           | Div,     Mat(Float, 1, l), Mat(Float, 1, l') when l = l'
                      -> (Mat(Float, 1, l), FDiv)
           | Equal,   Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FEqual)
@@ -490,10 +490,10 @@ let check program =
         in env, stmts, (typ, SBinop(e1, op, e2))
       | Unop(op, e) as ex -> let env, stmts, e = expr env stmts e in
          let t = fst e in
-         let typ, op = (match op with
-	   Neg when t = Mat(Int, 1, 1) -> (Mat(Int, 1, 1), INeg)
-	 | Neg when t = Mat(Float, 1, 1) -> (Mat(Float, 1, 1), FNeg)
-	 | Not when t = Mat(Bool, 1, 1) -> (Mat(Bool, 1, 1), BNot)
+         let typ, op = (match op, t with
+	   Neg, Mat(Int, w, l) -> (Mat(Int, w, l), INeg)
+	 | Neg, Mat(Float, w, l) -> (Mat(Float, w, l), FNeg)
+	 | Not, Mat(Bool, 1, l) -> (Mat(Bool, 1, l), BNot)
          | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
 	  		   string_of_typ t ^ " in " ^ string_of_expr ex))) in
          env, stmts, (typ, SUnop(op, e))

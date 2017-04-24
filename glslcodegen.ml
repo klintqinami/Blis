@@ -226,7 +226,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           "(" ^ expr env e1 ^ ") " ^ (match op with
               SA.IAdd | SA.FAdd -> "+"
             | SA.ISub | SA.FSub -> "-"
-            | SA.IMult | SA.FMult -> "*"
+            | SA.IMult | SA.FMult | SA.FMatMult -> "*"
             | SA.IDiv | SA.FDiv -> "/"
             | SA.IEqual | SA.FEqual | SA.BEqual | SA.U8Equal -> "=="
             | SA.INeq | SA.FNeq | SA.BNeq | SA.U8Neq -> "!="
@@ -238,9 +238,11 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
             | SA.BOr -> "||") ^
           " (" ^ expr env e2 ^ ")"
       | SA.SUnop(op, e) ->
-          (match op with
-              SA.INeg | SA.FNeg -> "-"
-            | SA.BNot -> "!") ^ "(" ^ expr env e ^ ")"
+          (match op, fst e with
+            | SA.INeg, _ | SA.FNeg, _ -> "-"
+            | SA.BNot, A.Mat(A.Bool, 1, 1) -> "!"
+            | SA.BNot, A.Mat(A.Bool, 1, _) -> "not"
+            | _, _ -> raise (Failure "shouldn't get here")) ^ "(" ^ expr env e ^ ")"
       | SA.STypeCons(elist) -> (match typ with
           A.Mat(_, _, _) | A.Array(_, _) ->
             let elist' = expr_list env elist
