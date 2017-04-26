@@ -392,12 +392,16 @@ let translate ((structs, pipelines, globals, functions) as program) =
           in
           let twod_array_wrap e cols rows llvbase_type str builder = 
             let output = twod_array cols rows llvbase_type in
-            let output = if cols = 1 then 
+            let output = if cols = 1 && rows != 1 then 
               L.build_insertvalue output e 0 str builder 
-            else
-              e
+              else if cols = 1 && rows = 1 then
+                let vec = L.build_insertvalue 
+                  (L.undef (L.array_type llvbase_type 1)) e 0 str builder in
+                L.build_insertvalue output vec 0 str builder  
+              else 
+                e
             in
-            let output = if rows = 1 then 
+            let output = if rows = 1 && cols != 1 then 
               List.fold_left (fun acc col -> 
                 let value = L.build_extractvalue e col str builder in
                 let column = 
@@ -421,7 +425,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
               else 
                 List.fold_left (fun acc col -> 
                   let value = 
-                    L.build_extractvalue (L.build_extractvalue e 0 str builder) col str builder
+                    L.build_extractvalue (L.build_extractvalue e col str builder) 0 str builder
                   in
                 L.build_insertvalue acc value col str builder) (L.undef
                 (L.array_type llvbase_type cols)) (range 0 cols)
@@ -462,7 +466,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
               let colm = L.build_extractvalue mat index str builder in 
               let val1 = L.build_extractvalue colm row str builder in 
               L.build_insertvalue acc val1 index "matrow" builder) 
-            (L.undef (ltype_of_typ (A.Mat(base_type, e1cols, 1)))) (range 0 e1cols)
+            (L.undef  (L.array_type llvbase_type e1cols)) (range 0 e1cols)
           in
           let mat_mult_col mat colvec str builder = 
              List.fold_left (fun acc row -> 
