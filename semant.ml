@@ -360,17 +360,40 @@ let check program =
                   ^ func.fname)))
     in
 
-    let check_assign lval rval stmts fail =
-      let ltyp = fst lval and rtyp = fst rval in
-      if ltyp <> rtyp then
-        raise fail
-      else
-        SAssign(lval, rval) :: stmts in
-
     (* create a new compiler temporary variable of the given type *)
     let add_tmp env typ =
       let env, name = add_private_name env in
       ({ env with locals = (typ, name) :: env.locals }, (typ, SId(name))) in
+
+    let rec check_assign env lval rval stmts fail =
+      let ltyp = fst lval and rtyp = fst rval in
+      let array_assign t =
+        let int1 = Mat(Int, 1, 1) and bool1 = Mat(Bool, 1, 1) in
+        let env, index = add_tmp env int1 in
+        let stmts = SAssign(index, (int1, SIntLit(0))) :: stmts in
+        let env, length = add_tmp env int1 in
+        let stmts = SCall(length, "length", [rval]) :: stmts in
+        let stmts = if ltyp = Array(t, None) then
+          SAssign(lval, (ltyp, STypeCons([length]))) :: stmts else stmts in
+        let env, stmt' = check_assign env (int1, SArrayDeref(lval, index))
+          (int1, SArrayDeref(rval, index)) [] fail in
+        env, SLoop(SIf((bool1, SBinop(length, ILeq, index)), [SBreak], []) :: List.rev stmt',
+        [SAssign(index, (int1, SBinop(index, IAdd, (int1, SIntLit(1)))))]) :: stmts in
+      match (ltyp, rtyp) with
+        (Array(t, i), Array(_, i')) when i = i' -> array_assign t       
+      | (Array(t, Some _), Array(_, None)) | (Array(t, None), Array(_, Some _)) ->
+        array_assign t
+      | (Struct(s), Struct(s')) when s = s' ->
+        let sdecl = StringMap.find s struct_decls in
+        List.fold_left (fun (env, stmts) (t, n) ->
+          let env, stmt' = check_assign env (t, SStructDeref(lval, n))
+          (t, SStructDeref(rval, n)) stmts fail in (env, stmt'))
+          (env, stmts) sdecl.members
+      | (l, r) when l = r ->
+        env, SAssign(lval, rval) :: stmts
+      | _ -> 
+        raise fail in
+
 
     let rec lvalue need_lvalue env stmts = function
         Id s -> let t, s' = find_symbol_table env.scope s in env, stmts, (t, SId(s'))
@@ -501,10 +524,10 @@ let check program =
       | Assign(lval, e) as ex ->
           let env, stmts, lval = lvalue true env stmts lval in
           let env, stmts, e = expr env stmts e in
-          env, check_assign lval e stmts
+          let env, stmts = check_assign env lval e stmts
             (Failure ("illegal assignment " ^ string_of_typ (fst lval) ^
-              " = " ^ string_of_typ (fst e) ^ " in " ^ string_of_expr ex)),
-          lval
+              " = " ^ string_of_typ (fst e) ^ " in " ^ string_of_expr ex)) in
+          env, stmts, lval
       | Call("length", [arr]) as call ->
           let env, stmts, arr = expr env stmts arr in
           let env, tmp = add_tmp env (Mat(Int, 1, 1)) in
@@ -562,16 +585,16 @@ let check program =
               (env, temp :: temps)) (env, []) fd.formals in
             let params = List.rev params in
             (* copy in-parameters to temporaries *)
-            let stmts = List.fold_left2 (fun stmts temp (fq, actual) ->
+            let env, stmts = List.fold_left2 (fun (env, stmts) temp (fq, actual) ->
               if fq = Out then
-                stmts
+                env, stmts
               else
                 let et = fst actual in
                 let ft = fst temp in
-                check_assign temp actual stmts
+                check_assign env temp actual stmts
                   (Failure ("illegal actual argument found " ^ string_of_typ et ^
                   " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr call)))
-            stmts params actuals in
+            (env, stmts) params actuals in
             (* make call *)
             let env, ret_tmp = if fd.typ = Void then
               env, (Void, SNoexpr)
@@ -580,16 +603,16 @@ let check program =
               env, tmp in
             let stmts = SCall(ret_tmp, fd.fname, params) :: stmts in
             (* copy temporaries to out-parameters *)
-            let stmts = List.fold_left2 (fun stmts temp (fq, actual) ->
+            let env, stmts = List.fold_left2 (fun (env, stmts) temp (fq, actual) ->
               if fq = In then
-                stmts
+                env, stmts
               else
                 let et = fst actual in
                 let ft = fst temp in
-                check_assign actual temp stmts
+                check_assign env actual temp stmts
                   (Failure ("illegal actual argument found " ^ string_of_typ et ^
                   " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr call)))
-             stmts params actuals in
+             (env, stmts) params actuals in
             (* return the temporary we made for the call *)
             env, stmts, ret_tmp
       | TypeCons(typ, actuals) as cons ->
@@ -610,13 +633,13 @@ let check program =
                 (env, temp :: temps)) (env, []) formals in
               let params = List.rev params in
               (* copy in-parameters to temporaries *)
-              let stmts = List.fold_left2 (fun stmts temp actual ->
+              let env, stmts = List.fold_left2 (fun (env, stmts) temp actual ->
                 let et = fst actual in
                 let ft = fst temp in
-                check_assign temp actual stmts
+                check_assign env temp actual stmts
                   (Failure ("illegal actual argument found " ^ string_of_typ et ^
                   " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr cons)))
-              stmts params actuals in
+              (env, stmts) params actuals in
               env, stmts, (typ, STypeCons(params))
           in
           let handle_array_vec base_type size =
@@ -672,7 +695,7 @@ let check program =
             | Return e ->
                 let env, sstmts, se = expr env sstmts e in
                 let env, tmp = add_tmp env func.typ in
-                let sstmts = check_assign tmp se sstmts
+                let env, sstmts = check_assign env tmp se sstmts
                   (Failure ("return gives " ^ string_of_typ (fst se) ^ " expected " ^
                            string_of_typ func.typ ^ " in " ^ string_of_expr e))
                 in
@@ -710,7 +733,7 @@ let check program =
                 let env = { env with locals = (t, name) :: env.locals } in
                 match oe with
                     Some e -> let env, sstmts, e' = expr env sstmts e in
-                      let sstmts = check_assign (t, SId name) e' sstmts
+                      let env, sstmts = check_assign env (t, SId name) e' sstmts
                         (Failure ("illegal initialization " ^ string_of_typ t ^
                           " = " ^ string_of_typ (fst e') ^ " in " ^
                           string_of_typ t ^ " " ^ s ^ " = " ^ string_of_expr e ^
