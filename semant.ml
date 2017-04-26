@@ -486,7 +486,7 @@ let check program =
                      -> (Mat(Float, w, l), FSub)
           | Mult,    Mat(Float, 1, l), Mat(Float, 1, l')  when l = l' 
                      -> (Mat(Float, 1, l), FMult)
-          | Mult,    Mat(Float, w, l), Mat(Float, w', l') when w = l' && l = w'
+          | Mult,    Mat(Float, w, l), Mat(Float, w', l') when w = l'
                      -> (Mat(Float, w', l), FMatMult)
           | Div,     Mat(Float, 1, l), Mat(Float, 1, l') when l = l'
                      -> (Mat(Float, 1, l), FDiv)

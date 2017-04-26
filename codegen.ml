@@ -379,9 +379,52 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SBinop (e1, op, e2) ->
           let e1' = expr builder e1
 	  and e2' = expr builder e2 in
-          let base_type, cols, rows = match fst sexpr with
-                | A.Mat(b, w, l) -> b, w, l 
+          let e1cols, e1rows, e2cols, e2rows = match fst e1, fst e2 with
+                | A.Mat(_, w, l), A.Mat(_, w', l') -> w, l, w', l'
                 | _ -> raise (Failure "shouldn't get here");
+          in
+          let base_type, llvbase_type, cols, rows = match fst sexpr with
+                | A.Mat(b, w, l) -> b, (ltype_of_typ (A.Mat(b, 1, 1))), w, l 
+                | _ -> raise (Failure "shouldn't get here");
+          in
+          let twod_array cols rows llvbase_type = 
+            L.undef (L.array_type (L.array_type llvbase_type rows) cols)
+          in
+          let twod_array_wrap e cols rows llvbase_type str builder = 
+            let output = twod_array cols rows llvbase_type in
+            let output = if cols = 1 then 
+              L.build_insertvalue output e 0 str builder 
+            else
+              e
+            in
+            let output = if rows = 1 then 
+              List.fold_left (fun acc col -> 
+                let value = L.build_extractvalue e col str builder in
+                let column = 
+                  L.build_insertvalue (L.undef (L.array_type llvbase_type 1)) value 0 str builder
+                in
+                L.build_insertvalue acc column col str builder) 
+                        (twod_array cols rows llvbase_type) (range 0 cols)
+            else 
+              output
+            in
+            if cols > 1 && rows > 1 then e
+            else output
+          in
+          let twod_array_unwrap e cols rows llvbase_type str builder = 
+            if cols > 1 && rows > 1 then e
+            else
+              if rows = 1 && cols = 1 then
+                L.build_extractvalue (L.build_extractvalue e 0 str builder) 0 str builder
+              else if cols = 1 then 
+                L.build_extractvalue e 0 str builder 
+              else 
+                List.fold_left (fun acc col -> 
+                  let value = 
+                    L.build_extractvalue (L.build_extractvalue e 0 str builder) col str builder
+                  in
+                L.build_insertvalue acc value col str builder) (L.undef
+                (L.array_type llvbase_type cols)) (range 0 cols)
           in
           let per_component_builder_vec op vec1 vec2 str builder = 
             List.fold_left (fun acc row -> 
@@ -404,6 +447,47 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 e2'' str builder
             else per_component_builder_mat op e1'' e2'' str builder
           in
+          let dot_prod vec1 vec2 str builder = 
+              let val1 = L.build_extractvalue vec1 0 str builder in
+              let val2 = L.build_extractvalue vec2 0 str builder in
+              let val3 = L.build_fmul val1 val2 str builder in
+            List.fold_left (fun sum index -> 
+              let val1' = L.build_extractvalue vec1 index str builder in
+              let val2' = L.build_extractvalue vec2 index str builder in
+              let val3' = L.build_fmul val1' val2' str builder in
+              L.build_fadd val3' sum str builder) val3 (range 1 e1cols)
+          in
+          let mat_row_extract mat row str builder = 
+            List.fold_left (fun acc index -> 
+              let colm = L.build_extractvalue mat index str builder in 
+              let val1 = L.build_extractvalue colm row str builder in 
+              L.build_insertvalue acc val1 index "matrow" builder) 
+            (L.undef (ltype_of_typ (A.Mat(base_type, e1cols, 1)))) (range 0 e1cols)
+          in
+          let mat_mult_col mat colvec str builder = 
+             List.fold_left (fun acc row -> 
+               let rowvec = mat_row_extract mat row str builder in
+               let value = dot_prod rowvec colvec str builder in
+               L.build_insertvalue acc value row "matcol" builder) 
+             (L.undef (L.array_type llvbase_type rows)) (range 0 rows)
+          in
+          let mat_mat_mult mat1 mat2 str builder =
+             List.fold_left (fun acc col ->
+               let x = L.build_extractvalue mat2 col str builder in
+               let b = mat_mult_col mat1 x str builder in
+              L.build_insertvalue acc b col "matmat" builder) 
+             (twod_array cols rows llvbase_type) (range 0 cols)
+          in
+          let fmat_mult mat1 mat2 str builder =
+              let mat1 = 
+                twod_array_wrap mat1 e1cols e1rows llvbase_type str builder
+              in
+              let mat2 = 
+                twod_array_wrap mat2 e2cols e2rows llvbase_type str builder
+              in
+              let output = mat_mat_mult mat1 mat2 str builder in
+              twod_array_unwrap output cols rows llvbase_type str builder 
+          in
 	  (match op with
 	    SA.IAdd     -> per_component_builder L.build_add
 	  | SA.ISub     -> per_component_builder L.build_sub
@@ -419,7 +503,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
           | SA.FSub     -> per_component_builder L.build_fsub
           | SA.FMult    -> per_component_builder L.build_fmul
           | SA.FDiv     -> per_component_builder L.build_fdiv
-          | SA.FMatMult -> raise (Failure "to be implemented")
+          | SA.FMatMult -> fmat_mult 
 	  | SA.FEqual   -> L.build_fcmp L.Fcmp.Oeq
 	  | SA.FNeq     -> L.build_fcmp L.Fcmp.One
 	  | SA.FLess    -> L.build_fcmp L.Fcmp.Olt
