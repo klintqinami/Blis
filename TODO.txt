@@ -1,5 +1,4 @@
 Features:
-- implicit conversions (Connor & Wendy)
 - routine to parse OBJ files (Jason)
 - add GLFW functions to read mouse position/click state
 - support for vector ops/matrices (Klint)
