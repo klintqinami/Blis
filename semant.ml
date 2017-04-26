@@ -653,6 +653,21 @@ let check program =
                * anyways.
                *)
             | Struct s -> expr env stmts (Call(s, actuals))
+            | Mat(b, 1, 1) ->
+                (match actuals with
+                    [e] ->
+                      let env, stmts, e' = expr env stmts e in
+                      env, stmts, (typ, SUnop((match b, fst e' with
+                          Int, Mat(Float, 1, 1) -> Float2Int
+                        | Int, Mat(Bool, 1, 1) -> Bool2Int
+                        | Float, Mat(Int, 1, 1) -> Int2Float
+                        | Float, Mat(Bool, 1, 1) -> Bool2Float
+                        | _ -> raise (Failure ("cannot convert " ^
+                          string_of_typ (fst e') ^ " to " ^
+                          string_of_typ typ ^ " in " ^
+                          string_of_expr cons))), e'))
+                  | _ -> raise (Failure ("expected only one argument in " ^ 
+                    string_of_expr cons)))
             | Mat(b, 1, w) -> handle_array_vec (Mat(b, 1, 1)) w
             | Mat(b, w, l) -> handle_array_vec (Mat(b, 1, l)) w
             | Array(t, Some s) -> handle_array_vec t s

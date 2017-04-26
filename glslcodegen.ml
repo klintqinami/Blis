@@ -242,6 +242,8 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
             | SA.INeg, _ | SA.FNeg, _ -> "-"
             | SA.BNot, A.Mat(A.Bool, 1, 1) -> "!"
             | SA.BNot, A.Mat(A.Bool, 1, _) -> "not"
+            | SA.Int2Float, _ | SA.Bool2Float, _ -> "float"
+            | SA.Float2Int, _ | SA.Bool2Int, _ -> "int"
             | _, _ -> raise (Failure "shouldn't get here")) ^ "(" ^ expr env e ^ ")"
       | SA.STypeCons(elist) -> (match typ with
           A.Mat(_, _, _) | A.Array(_, _) ->

@@ -457,9 +457,13 @@ let translate ((structs, pipelines, globals, functions) as program) =
             else per_component_builder_mat op e'' str builder
           in
 	  (match op with
-	    SA.INeg     -> per_component_builder L.build_neg
-	  | SA.FNeg     -> per_component_builder L.build_fneg
-          | SA.BNot     -> per_component_builder L.build_not) e' "tmp" builder
+	    SA.INeg       -> per_component_builder L.build_neg e'
+	  | SA.FNeg       -> per_component_builder L.build_fneg e'
+          | SA.BNot       -> per_component_builder L.build_not e'
+          | SA.Int2Float  -> L.build_sitofp e' f32_t
+          | SA.Float2Int  -> L.build_fptosi e' i32_t
+          | SA.Bool2Int   -> L.build_zext e' i32_t
+          | SA.Bool2Float -> L.build_uitofp e' f32_t) "tmp" builder
       | SA.STypeCons act ->
           match fst sexpr with
               A.Mat(_, _, _) | A.Array(_, Some _) ->

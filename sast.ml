@@ -9,7 +9,8 @@ type sop = IAdd | ISub | IMult | IDiv
          | U8Equal | U8Neq
          | BAnd | BOr | BEqual | BNeq
 
-type suop = INeg | FNeg | BNot
+type suop = INeg | FNeg | BNot |
+            Int2Float | Float2Int | Bool2Int | Bool2Float
 
 type sexpr_detail =
     SIntLit of int
@@ -97,6 +98,7 @@ let string_of_sop = function
 let string_of_suop = function
     INeg | FNeg -> "-"
   | BNot -> "!"
+  | _ -> raise (Failure "shouldn't get here")
 
 let rec string_of_sexpr (s : sexpr) = match snd s with
     SIntLit(l) -> string_of_int l
@@ -110,6 +112,10 @@ let rec string_of_sexpr (s : sexpr) = match snd s with
   | SArrayDeref(e, i) -> string_of_sexpr e ^ "[" ^ string_of_sexpr i ^ "]"
   | SBinop(e1, o, e2) ->
       string_of_sexpr e1 ^ " " ^ string_of_sop o ^ " " ^ string_of_sexpr e2
+  | SUnop(Float2Int, e) -> "int(" ^ string_of_sexpr e ^ ")"
+  | SUnop(Int2Float, e) -> "float(" ^ string_of_sexpr e ^ ")"
+  | SUnop(Bool2Int, e) -> "int(" ^ string_of_sexpr e ^ ")"
+  | SUnop(Bool2Float, e) -> "float(" ^ string_of_sexpr e ^ ")"
   | SUnop(o, e) -> string_of_suop o ^ string_of_sexpr e
   | STypeCons(el) ->
       string_of_typ (fst s) ^ "(" ^
