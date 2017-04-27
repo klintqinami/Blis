@@ -223,20 +223,40 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
       | SA.SArrayDeref(e, idx) ->
           "(" ^ expr env e ^ ")[" ^ expr env idx ^ "]"
       | SA.SBinop(e1, op, e2) ->
-          "(" ^ expr env e1 ^ ") " ^ (match op with
-              SA.IAdd | SA.FAdd -> "+"
-            | SA.ISub | SA.FSub -> "-"
-            | SA.IMult | SA.FMult | SA.FMatMult | SA.Splat -> "*"
-            | SA.IDiv | SA.FDiv -> "/"
-            | SA.IEqual | SA.FEqual | SA.BEqual | SA.U8Equal -> "=="
-            | SA.INeq | SA.FNeq | SA.BNeq | SA.U8Neq -> "!="
-            | SA.ILess | SA.FLess -> "<"
-            | SA.IGreater | SA.FGreater -> ">"
-            | SA.IGeq | SA.FGeq -> ">="
-            | SA.ILeq | SA.FLeq -> "<="
-            | SA.BAnd -> "&&"
-            | SA.BOr -> "||") ^
-          " (" ^ expr env e2 ^ ")"
+          let e1' = expr env e1 in
+          let e2' = expr env e2 in
+          let e1cols, e1rows, e2cols, e2rows = match fst e1, fst e2 with
+                | A.Mat(_, w, l), A.Mat(_, w', l') -> w, l, w', l'
+                | _ -> raise (Failure "shoudln't get here")
+          in
+          let ordinary_binop str = 
+                "(" ^ e1' ^ ") " ^ str ^ " (" ^ e2' ^ ")"
+          in
+          let fmat_mult = 
+            if (e1rows > 1 && e2rows > 1) || (e1rows = 1 && e1cols = 1) ||
+                (e2rows = 1 && e2cols = 1) then ordinary_binop "*"
+            else if e1rows = 1 && e2cols = 1 then
+              "dot(" ^ "(" ^ e1' ^ ") ," ^ " (" ^ e2' ^ ")" ^ ") "
+            else if e1cols = 1 && e2rows = 1 then
+              "outerProduct(" ^ "(" ^ e1' ^ ") ," ^ " (" ^ e2' ^ ")" ^ ") "
+            else 
+              (* Row vector times matrix *)
+              "transpose( " ^ " (" ^ e2' ^ ")" ^") " ^ "*" ^  "(" ^ e1' ^ ")" 
+          in
+          (match op with
+              SA.IAdd | SA.FAdd -> ordinary_binop "+"
+            | SA.ISub | SA.FSub -> ordinary_binop "-"
+            | SA.IMult | SA.FMult | SA.Splat -> ordinary_binop "*"
+            | SA.IDiv | SA.FDiv -> ordinary_binop "/"
+            | SA.IEqual | SA.FEqual | SA.BEqual | SA.U8Equal -> ordinary_binop "=="
+            | SA.INeq | SA.FNeq | SA.BNeq | SA.U8Neq -> ordinary_binop "!="
+            | SA.ILess | SA.FLess -> ordinary_binop "<"
+            | SA.IGreater | SA.FGreater -> ordinary_binop ">"
+            | SA.IGeq | SA.FGeq -> ordinary_binop ">="
+            | SA.ILeq | SA.FLeq -> ordinary_binop "<="
+            | SA.BAnd -> ordinary_binop "&&"
+            | SA.BOr -> ordinary_binop "||"
+            | SA.FMatMult -> fmat_mult)
       | SA.SUnop(op, e) ->
           (match op, fst e with
             | SA.INeg, _ | SA.FNeg, _ -> "-"
