@@ -369,16 +369,30 @@ let check program =
       let ltyp = fst lval and rtyp = fst rval in
       let array_assign t =
         let int1 = Mat(Int, 1, 1) and bool1 = Mat(Bool, 1, 1) in
-        let env, index = add_tmp env int1 in
-        let stmts = SAssign(index, (int1, SIntLit(0))) :: stmts in
-        let env, length = add_tmp env int1 in
-        let stmts = SCall(length, "length", [rval]) :: stmts in
-        let stmts = if ltyp = Array(t, None) then
-          SAssign(lval, (ltyp, STypeCons([length]))) :: stmts else stmts in
-        let env, stmt' = check_assign env (int1, SArrayDeref(lval, index))
-          (int1, SArrayDeref(rval, index)) [] fail in
-        env, SLoop(SIf((bool1, SBinop(length, ILeq, index)), [SBreak], []) :: List.rev stmt',
-        [SAssign(index, (int1, SBinop(index, IAdd, (int1, SIntLit(1)))))]) :: stmts in
+        match snd rval with
+            STypeCons(_) when ltyp = rtyp ->
+              (* in this special case, we're just allocating a new array, and
+               * copying the RHS in a loop would mean repeatedly allocating
+               * memory -- which is silly. We know that the types match exactly,
+               * and there are no aliasing concerns since no other name exists
+               * for this chunk of memory. Therefore we just do a simple
+               * assignment and move on.
+               *)
+              env, SAssign(lval, rval) :: stmts
+          | _ ->
+            let env, index = add_tmp env int1 in
+            let stmts = SAssign(index, (int1, SIntLit(0))) :: stmts in
+            let env, length = add_tmp env int1 in
+            let stmts = SCall(length, "length", [rval]) :: stmts in
+            let stmts = if ltyp = Array(t, None) then
+              SAssign(lval, (ltyp, STypeCons([length]))) :: stmts else stmts in
+            let env, stmt' = check_assign env (int1, SArrayDeref(lval, index))
+              (int1, SArrayDeref(rval, index)) [] fail in
+            env, SLoop(
+              SIf((bool1, SBinop(length, ILeq, index)), [SBreak], []) ::
+                List.rev stmt',
+              [SAssign(index, (int1, SBinop(index, IAdd, (int1, SIntLit(1)))))])
+            :: stmts in
       match (ltyp, rtyp) with
         (Array(t, i), Array(_, i')) when i = i' -> array_assign t       
       | (Array(t, Some _), Array(_, None)) | (Array(t, None), Array(_, Some _)) ->
