@@ -2,12 +2,10 @@ Features:
 - special functions sin, cos, pow
 - modulo binary operator
 - uniform matrices
-- index buffers
 - add GLFW functions to read mouse position/click state
 - support for equality (Klint?)
 
 Broken things:
-- routine to parse OBJ files
 - Check that types match for varying linking, more thoroughly test it
 - Inhibit access to global variables from gpu functions
 - Add support for inout parameters to entrypoints, or disallow them
