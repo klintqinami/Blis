@@ -746,10 +746,18 @@ let check program =
                     " in " ^ func.fname)
                   (fun n -> "illegal void local " ^ n ^
                                   " in " ^ func.fname) b);
+                (* evaluate the initializer before we add to the symbol table to
+                 * make sure the new name isn't available
+                 *)
+                let env, sstmts, e' =
+                  match oe with
+                      Some e -> let env, sstmts, e' = expr env sstmts e in
+                        env, sstmts, Some (e', e)
+                    | None -> env, sstmts, None in
                 let env, name = add_symbol_table env s t in
                 let env = { env with locals = (t, name) :: env.locals } in
-                match oe with
-                    Some e -> let env, sstmts, e' = expr env sstmts e in
+                match e' with
+                    Some (e', e) ->
                       let env, sstmts = check_assign env (t, SId name) e' sstmts
                         (Failure ("illegal initialization " ^ string_of_typ t ^
                           " = " ^ string_of_typ (fst e') ^ " in " ^

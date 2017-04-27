@@ -29,8 +29,17 @@ let _ =
   else
     open_in !input
   in
+  let prelude_channel = open_in "./prelude.blis" in
   let lexbuf = Lexing.from_channel channel in
-  let ast = Parser.program Scanner.token lexbuf in
+  let prelude_lexbuf = Lexing.from_channel prelude_channel in
+  let token _ =
+    let token = Scanner.token prelude_lexbuf in
+    if token = Parser.EOF then
+      Scanner.token lexbuf
+    else
+      token
+  in
+  let ast = Parser.program token (Lexing.from_string "") in
   let sast = Semant.check ast in
   match !action with
     Ast -> print_string (Sast.string_of_sprogram sast)
