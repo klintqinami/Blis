@@ -83,6 +83,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let pipeline_t = L.struct_type context [|
     (* vertex_array *)
     i32_t;
+    (* index_buffer *)
+    i32_t;
     (* program *)
     i32_t
   |] in
@@ -198,10 +200,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let pipeline_get_uniform_int_func =
     L.declare_function "pipeline_get_uniform_int"
       pipeline_get_uniform_int_t the_module in
-  let bind_pipeline_t = L.function_type void_t [| L.pointer_type pipeline_t |] in
-  let bind_pipeline_func =
-    L.declare_function "bind_pipeline" bind_pipeline_t the_module in
-  let draw_arrays_t = L.function_type void_t [| i32_t |] in
+  let draw_arrays_t = L.function_type void_t [| L.pointer_type pipeline_t; i32_t |] in
   let draw_arrays_func =
     L.declare_function "draw_arrays" draw_arrays_t the_module in
   let swap_buffers_t = L.function_type void_t [| voidp_t |] in
@@ -296,6 +295,12 @@ let translate ((structs, pipelines, globals, functions) as program) =
                   | "w" -> 3
                   | _ -> raise (Failure "shouldn't get here"))|]
                   "tmp" builder
+            | A.Pipeline(_) ->
+                (* currently we can only get here by setting the index buffer,
+                 * which is just a normal member of the internal pipeline
+                 * struct.
+                 *)
+                L.build_struct_gep e' 1 "tmp" builder
             | _ -> raise (Failure "unexpected type"))
       | SA.SArrayDeref (e, i) ->
           let e' = lvalue builder e in
@@ -348,6 +353,9 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SCharLit c -> L.const_int i8_t (Char.code c)
       | SA.SStringLit s -> L.const_string context s
       | SA.SNoexpr -> izero
+      | SA.SStructDeref((A.Pipeline(_), _) as e, "indices") ->
+          let e' = expr builder e in
+          L.build_extractvalue e' 1 "" builder
       | SA.SStructDeref((A.Pipeline(p), _) as e, m) ->
           let pdecl = StringMap.find p pipeline_decls in
           let e' = lvalue builder e in
@@ -661,9 +669,9 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SCall (_, "upload_buffer", [buf; data]) ->
           let buf' = expr builder buf in
           let data', size = (match (fst data) with
-            A.Array(A.Mat(A.Float, 1, s), Some n) ->
+            A.Array(A.Mat(_, 1, s), Some n) ->
               (lvalue builder data, L.const_int i32_t (4 * s * n))
-          | A.Array(A.Mat(A.Float, 1, n), None) -> let s = expr builder data in
+          | A.Array(A.Mat(_, 1, n), None) -> let s = expr builder data in
               (L.build_extractvalue s 1 "" builder,
               L.build_mul (L.const_int i32_t (4 * n))
               (L.build_extractvalue s 0 "" builder) "" builder)
@@ -673,13 +681,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
             [| buf'; data'; size;
                L.const_int i32_t 0x88E4 (* GL_STATIC_DRAW *) |] "" builder);
           builder
-      | SA.SCall (_, "bind_pipeline", [p]) ->
+      | SA.SCall (_, "draw", [p; i]) ->
           let p' = lvalue builder p in
-          ignore (L.build_call bind_pipeline_func [| p' |] "" builder);
-          builder
-      | SA.SCall (_, "draw_arrays", [i]) ->
           let i' = expr builder i in
-          ignore (L.build_call draw_arrays_func [| i' |] "" builder);
+          ignore (L.build_call draw_arrays_func [| p'; i' |] "" builder);
           builder
       | SA.SCall (_, "swap_buffers", [w]) ->
           let w' = expr builder w in

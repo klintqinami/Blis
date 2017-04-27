@@ -35,8 +35,7 @@ int main()
   pipeline my_pipeline p = pipeline my_pipeline();
   p.pos = b;
 
-  bind_pipeline(p);
-  draw_arrays(6);
+  draw(p, 6);
 
   int x;
   int y;

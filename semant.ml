@@ -93,7 +93,7 @@ let check program =
   in
 
   let check_buffer_type = function
-      Mat(Float, 1, _) -> ()
+      Mat(Float, 1, _) | Mat(Int, 1, _) -> ()
     | _ as t -> raise (Failure ("bad type " ^ string_of_typ t ^ " for buffer"))
   in
 
@@ -213,8 +213,6 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "set_active_window"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
-     { typ = Void; fname = "draw_arrays"; formals = [In, (int1, "n")];
-       fqual = CpuOnly; body = [] };
      { typ = Void; fname = "swap_buffers"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "poll_events"; formals = [];
@@ -234,7 +232,7 @@ let check program =
      { typ = Void; fname = "length"; formals = []; fqual = Both; body = [] };
      { typ = Void; fname = "upload_buffer"; formals = []; fqual = CpuOnly;
        body = [] };
-     { typ = Void; fname = "bind_pipelline"; formals = []; fqual = CpuOnly;
+     { typ = Void; fname = "draw"; formals = []; fqual = CpuOnly;
        body = [] };
     ]
   in
@@ -301,12 +299,18 @@ let check program =
             else Some vtyp') vuniforms funiforms in
         let uniforms_list = List.map (fun (name, typ) -> (typ, name))
           (StringMap.bindings uniforms) in
+        let inputs_list = List.map (fun (_, (t, n)) -> (Buffer(t), n))
+          (List.filter (fun (qual, _) -> qual = In) vert_decl.formals) in
+        let pipeline_members =
+          (Buffer(Mat(Int, 1, 1)), "indices") :: uniforms_list @ inputs_list in
+        report_duplicate (fun n -> "duplicate member " ^ n ^ " of pipeline " ^
+          pd.pname) (List.map snd pipeline_members);
         { spname = pd.pname;
           sfshader = pd.fshader;
           svshader = pd.vshader;
-          sinputs = List.map (fun (_, (t, n)) -> (Buffer(t), n))
-            (List.filter (fun (qual, _) -> qual = In) vert_decl.formals);
+          sinputs = inputs_list;
           suniforms = uniforms_list;
+          smembers = pipeline_members;
         })
   pipelines
   in
@@ -425,13 +429,10 @@ let check program =
             | Pipeline p ->
                 let ptype = StringMap.find p pipeline_decls in
                 (try
-                  fst (List.find (fun b -> snd b = m) ptype.sinputs)
+                  fst (List.find (fun b -> snd b = m) ptype.smembers)
                 with Not_found ->
-                  (try
-                    fst (List.find (fun b -> snd b = m) ptype.suniforms)
-                  with Not_found ->
-                    raise (Failure ("pipeline " ^ p ^ " does not contain " ^
-                      m ^ " in " ^ string_of_expr d))))
+                  raise (Failure ("pipeline " ^ p ^ " does not contain " ^
+                    m ^ " in " ^ string_of_expr d)))
             | Mat(b, 1, w) ->
                 (match m with
                     "x" | "y" when w >= 2 -> Mat(b, 1, 1)
@@ -593,14 +594,14 @@ let check program =
             | _ -> raise (Failure ("first parameter to upload_buffer must be " ^
                     "a buffer in " ^ string_of_expr call))) :: stmts,
           (Void, SNoexpr)
-      | Call("bind_pipeline", [p]) as call ->
-          check_call_qualifiers env "bind_pipeline" CpuOnly;
+      | Call("draw", [p; i]) as call ->
+          check_call_qualifiers env "draw" CpuOnly;
           let env, stmts, p' = expr env stmts p in
-          env, (match fst p' with
-              Pipeline(_) ->
-                SCall((Void, SNoexpr), "bind_pipeline", [p'])
-            | _ as t -> raise (Failure ("calling bind_pipeline with " ^
-              string_of_typ t ^ " instead of pipeline in " ^ 
+          let env, stmts, i' = expr env stmts i in
+          env, (match fst p', fst i' with
+              Pipeline(_), Mat(Int, 1, 1) ->
+                SCall((Void, SNoexpr), "draw", [p'; i'])
+            | _ -> raise (Failure ("invalid arguments to draw() in " ^
               string_of_expr call))) :: stmts,
           (Void, SNoexpr)
       | Call(fname, actuals) as call -> let fd = function_decl fname in
