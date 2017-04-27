@@ -3,7 +3,7 @@
 type op = Add | Sub | Mult | Div | Equal | Neq | Less | Leq | Greater | Geq |
           And | Or
 
-type uop = Neg | Not
+type uop = Neg | Not | PreInc | PreDec | PostInc | PostDec
 
 type base_type = Float | Int | Byte | Bool
 
@@ -104,10 +104,6 @@ let string_of_op = function
   | And -> "&&"
   | Or -> "||"
 
-let string_of_uop = function
-    Neg -> "-"
-  | Not -> "!"
-
 let rec string_of_typ = function
     Mat(Bool, 1, 1) -> "bool"
   | Mat(Int, 1, 1) -> "int"
@@ -129,7 +125,16 @@ let rec string_of_typ = function
   | Window -> "window"
   | Void -> "void"
 
-let rec string_of_expr = function
+let rec string_of_expr expr = 
+  let string_of_uop o e = match o with
+      Neg -> "-" ^ string_of_expr e
+    | Not -> "!" ^ string_of_expr e
+    | PreInc -> string_of_expr e ^ "++"
+    | PostInc -> "++" ^ string_of_expr e  
+    | PreDec -> string_of_expr e ^ "--"
+    | PostDec -> "--" ^ string_of_expr e  
+  in
+  (match expr with
     IntLit(l) -> string_of_int l
   | FloatLit(l) -> string_of_float l
   | BoolLit(true) -> "true"
@@ -141,13 +146,13 @@ let rec string_of_expr = function
   | ArrayDeref(e, i) -> string_of_expr e ^ "[" ^ string_of_expr i ^ "]"
   | Binop(e1, o, e2) ->
       string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
-  | Unop(o, e) -> string_of_uop o ^ string_of_expr e
+  | Unop(o, e) -> string_of_uop o e
   | Assign(v, e) -> string_of_expr v ^ " = " ^ string_of_expr e
   | TypeCons(t, el) ->
       string_of_typ t ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Call(fname, el) ->
       fname ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
-  | Noexpr -> ""
+  | Noexpr -> "")
 
 let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
 

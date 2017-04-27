@@ -7,17 +7,16 @@ open Ast
 %token SEMI
 %token LPAREN RPAREN
 %token LBRACE RBRACE
-%token LBRACKET RBRACKET
+%token LBRACKET RBRACKET 
 %token COMMA
-%token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT
+%token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT INC DEC
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
-%token BOOL BYTE VOID STRUCT PIPELINE BUFFER WINDOW
+%token VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
-%token IN OUT INOUT
+%token IN OUT INOUT UNIFORM
 %token <int> BOOL
 %token <int> BYTE
-%token IN OUT INOUT UNIFORM
 %token <int * int> FLOAT
 %token <int> INT
 %token <int> INT_LITERAL
@@ -36,8 +35,8 @@ open Ast
 %left LT GT LEQ GEQ
 %left PLUS MINUS
 %left TIMES DIVIDE
-%right NOT NEG
-%left DOT LPAREN LBRACKET
+%right NOT NEG PREINC PREDEC
+%left DOT LPAREN LBRACKET POSTDEC POSTINC INC DEC
 
 %start program
 %type <Ast.program> program
@@ -184,6 +183,10 @@ expr:
   | expr GEQ    expr { Binop($1, Geq,   $3) }
   | expr AND    expr { Binop($1, And,   $3) }
   | expr OR     expr { Binop($1, Or,    $3) }
+  | expr INC %prec POSTINC { Unop(PostInc, $1) }
+  | expr DEC %prec POSTDEC { Unop(PostDec, $1) }
+  | INC expr %prec PREINC  { Unop(PreInc, $2) }
+  | DEC expr %prec PREDEC  { Unop(PreDec, $2) }
   | MINUS expr %prec NEG { Unop(Neg, $2) }
   | NOT expr         { Unop(Not, $2) }
   | expr ASSIGN expr   { Assign($1, $3) }

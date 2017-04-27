@@ -19,6 +19,8 @@ rule token = parse
 | ','      { COMMA }
 | '+'      { PLUS }
 | '-'      { MINUS }
+| "++"     { INC }
+| "--"     { DEC }
 | '*'      { TIMES }
 | '/'      { DIVIDE }
 | '='      { ASSIGN }

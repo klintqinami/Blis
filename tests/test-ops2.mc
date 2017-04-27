@@ -13,6 +13,6 @@ int main()
   printb(!false);
   printb(!true);
   printi(-10);
-  printi(--42);
+  printi(-(-42));
   return 0;
 }

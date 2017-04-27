@@ -515,13 +515,36 @@ let check program =
         in env, stmts, (typ, SBinop(e1, op, e2))
       | Unop(op, e) as ex -> let env, stmts, e = expr env stmts e in
          let t = fst e in
-         let typ, op = (match op, t with
-	   Neg, Mat(Int, w, l) -> (Mat(Int, w, l), INeg)
-	 | Neg, Mat(Float, w, l) -> (Mat(Float, w, l), FNeg)
-	 | Not, Mat(Bool, 1, l) -> (Mat(Bool, 1, l), BNot)
-         | _ -> raise (Failure ("illegal unary operator " ^ string_of_uop op ^
-	  		   string_of_typ t ^ " in " ^ string_of_expr ex))) in
-         env, stmts, (typ, SUnop(op, e))
+         (match op, t with
+	   Neg, Mat(Int, w, l) -> env, stmts, (Mat(Int, w, l), SUnop(INeg, e))
+	 | Neg, Mat(Float, w, l) -> env, stmts, (Mat(Float, w, l), SUnop(FNeg, e))
+	 | Not, Mat(Bool, 1, l) -> env, stmts, (Mat(Bool, 1, l), SUnop(BNot, e))
+         | PostInc, Mat(Int, 1, 1) -> 
+                let env, tmp = add_tmp env (Mat(Int, 1, 1)) in
+                let stmts = SAssign(tmp, (Mat(Int, 1, 1), snd e)) :: stmts in
+                let stmts = 
+                  SAssign(e, (Mat(Int, 1, 1), 
+                        SBinop(e, IAdd, (Mat(Int, 1, 1), SIntLit(1))))) 
+                  :: stmts in env, stmts, tmp
+         | PostDec, Mat(Int, 1, 1) -> 
+                let env, tmp = add_tmp env (Mat(Int, 1, 1)) in
+                let stmts = SAssign(tmp, (Mat(Int, 1, 1), snd e)) :: stmts in
+                let stmts = 
+                  SAssign(e, (Mat(Int, 1, 1), 
+                        SBinop(e, ISub, (Mat(Int, 1, 1), SIntLit(1))))) 
+                  :: stmts in env, stmts, tmp
+         | PreInc, Mat(Int, 1, 1) -> 
+                let stmts = 
+                  SAssign(e, (Mat(Int, 1, 1), 
+                        SBinop(e, IAdd, (Mat(Int, 1, 1), SIntLit(1))))) 
+                  :: stmts in env, stmts, e
+         | PreDec, Mat(Int, 1, 1) -> 
+                let stmts = 
+                  SAssign(e, (Mat(Int, 1, 1), 
+                        SBinop(e, ISub, (Mat(Int, 1, 1), SIntLit(1))))) 
+                  :: stmts in env, stmts, e
+         | _ -> raise (Failure ("illegal unary operator " ^ "in " ^
+         string_of_expr ex)))
       | Noexpr -> env, stmts, (Void, SNoexpr)
       | Assign(lval, e) as ex ->
           let env, stmts, lval = lvalue true env stmts lval in
