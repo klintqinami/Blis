@@ -339,7 +339,8 @@ let check program =
             func.fname ^ " which is not an entrypoint"))
         else
           match typ with
-              Mat(_, 1, _) -> ()
+              Mat(Float, _, _) -> ()
+            | Mat(Int, 1, _) -> ()
             | _ -> raise (Failure ("illegal type " ^ string_of_typ typ ^
               " used in a uniform argument in " ^ func.fname)))
     func.formals;

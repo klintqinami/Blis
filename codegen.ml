@@ -334,10 +334,11 @@ let translate ((structs, pipelines, globals, functions) as program) =
               lval'; L.build_global_stringptr m "" builder |] "" builder in
             ignore (match b with
                 A.Float -> L.build_call pipeline_set_uniform_float_func [|
-                  lval'; loc; L.build_gep e' [| izero; izero |] "" builder;
+                  lval'; loc; L.build_gep e' [| izero; izero; izero |] "" builder;
                   L.const_int i32_t n; L.const_int i32_t c |] "" builder
               | A.Int -> L.build_call pipeline_set_uniform_int_func [|
-                  lval'; loc; L.build_gep e' [| izero; izero |] "" builder;
+                  lval'; loc;
+                  L.build_gep e' [| izero; izero; izero |] "" builder;
                   L.const_int i32_t n; L.const_int i32_t c |] "" builder
               | A.Bool -> raise (Failure "unimplemented boolean uniforms")
               | _ -> raise (Failure "unimplemented"));
@@ -371,7 +372,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 A.Mat(A.Float, _, _) ->
                   L.build_call pipeline_get_uniform_float_func [|
                     e'; loc;
-                    L.build_gep tmp [| izero; izero |] "" builder |]
+                    L.build_gep tmp [| izero; izero; izero |] "" builder |]
                   "" builder
               | A.Mat(A.Int, _, _) ->
                   L.build_call pipeline_get_uniform_int_func [|
