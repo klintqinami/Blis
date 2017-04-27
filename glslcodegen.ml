@@ -226,7 +226,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           "(" ^ expr env e1 ^ ") " ^ (match op with
               SA.IAdd | SA.FAdd -> "+"
             | SA.ISub | SA.FSub -> "-"
-            | SA.IMult | SA.FMult | SA.FMatMult -> "*"
+            | SA.IMult | SA.FMult | SA.FMatMult | SA.Splat -> "*"
             | SA.IDiv | SA.FDiv -> "/"
             | SA.IEqual | SA.FEqual | SA.BEqual | SA.U8Equal -> "=="
             | SA.INeq | SA.FNeq | SA.BNeq | SA.U8Neq -> "!="

@@ -492,6 +492,29 @@ let translate ((structs, pipelines, globals, functions) as program) =
               let output = mat_mat_mult mat1 mat2 str builder in
               twod_array_unwrap output cols rows llvbase_type str builder 
           in
+          let scalar_expander value cols rows str builder = 
+            if cols = 1 && rows = 1 then value
+            else if cols = 1 && rows != 1 then 
+              List.fold_left (fun acc row -> 
+                L.build_insertvalue acc value row str builder) 
+              (L.undef (L.array_type llvbase_type rows)) (range 0 rows)
+            else if cols != 1 && rows = 1 then
+              List.fold_left (fun acc col -> 
+                L.build_insertvalue acc value col str builder) 
+              (L.undef (L.array_type llvbase_type cols)) (range 0 cols)
+            else 
+              let column = List.fold_left (fun acc row -> 
+                L.build_insertvalue acc value row str builder) 
+              (L.undef (L.array_type llvbase_type rows)) (range 0 rows)
+              in
+              List.fold_left (fun acc col -> 
+                L.build_insertvalue acc column col str builder) 
+              (twod_array cols rows llvbase_type) (range 0 cols)
+          in  
+          let splat_mult e1 e2 str builder = 
+            per_component_builder L.build_fmul 
+              (scalar_expander e1 cols rows str builder) e2 str builder
+          in
 	  (match op with
 	    SA.IAdd     -> per_component_builder L.build_add
 	  | SA.ISub     -> per_component_builder L.build_sub
@@ -508,6 +531,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
           | SA.FMult    -> per_component_builder L.build_fmul
           | SA.FDiv     -> per_component_builder L.build_fdiv
           | SA.FMatMult -> fmat_mult 
+          | SA.Splat    -> splat_mult
 	  | SA.FEqual   -> L.build_fcmp L.Fcmp.Oeq
 	  | SA.FNeq     -> L.build_fcmp L.Fcmp.One
 	  | SA.FLess    -> L.build_fcmp L.Fcmp.Olt

@@ -1,0 +1,33 @@
+int main() { 
+    float c = 42.;
+    vec3 x1 = vec3(1., 2., 3.);
+    x1 = c * x1;
+    mat3x1 x2 = mat3x1(1., 2., 3.);
+    x2 = c * x2;
+    vec3 e1 = vec3(1., 0., 0.);
+    vec3 e2 = vec3(0., 1., 0.);
+    vec3 e3 = vec3(0., 0., 1.);
+    mat3x3 id = mat3x3(e1, e2, e3);
+    vec3 tom = vec3(1337., 42., 300.);
+    tom = (c * id) * tom;
+    mat3x3 P = c * id;
+    printf(x1.x);
+    printf(x1.y);
+    printf(x1.z);
+    printf(x2.x);
+    printf(x2.y);
+    printf(x2.z);
+    printf(tom.x);
+    printf(tom.y);
+    printf(tom.z);
+    printf(P.x.x);
+    printf(P.x.y);
+    printf(P.x.z);
+    printf(P.y.x);
+    printf(P.y.y);
+    printf(P.y.z);
+    printf(P.z.x);
+    printf(P.z.y);
+    printf(P.z.z);
+    return 0;
+}

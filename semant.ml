@@ -488,6 +488,8 @@ let check program =
                      -> (Mat(Float, 1, l), FMult)
           | Mult,    Mat(Float, w, l), Mat(Float, w', l') when w = l'
                      -> (Mat(Float, w', l), FMatMult)
+          | Mult,    Mat(Float, 1, 1), Mat(Float, w, l) 
+                     -> (Mat(Float, w, l), Splat)
           | Div,     Mat(Float, 1, l), Mat(Float, 1, l') when l = l'
                      -> (Mat(Float, 1, l), FDiv)
           | Equal,   Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FEqual)
