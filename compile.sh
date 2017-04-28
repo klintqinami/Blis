@@ -8,7 +8,7 @@ if [[ `uname` == "Darwin" ]]; then
   LIBS="-L/usr/local/lib/ -framework OpenGL -lglfw"
 else
   LLC="llc"
-  LIBS="-lGLEW -lGL -lglfw"
+  LIBS="-lGLEW -lGL -lglfw -lm"
 fi
 
 basename=$(basename "$1" .mc)

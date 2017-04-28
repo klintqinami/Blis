@@ -225,6 +225,24 @@ let translate ((structs, pipelines, globals, functions) as program) =
     L.function_type void_t [| blis_string_t |] in
   let print_string_func =
     L.declare_function "print_string" print_string_t the_module in
+  let sin_t = 
+    L.function_type f32_t [| f32_t |] 
+  in
+  let sin_func =
+    L.declare_function "sinf" sin_t the_module 
+  in
+  let cos_t = 
+    L.function_type f32_t [| f32_t |] 
+  in
+  let cos_func =
+    L.declare_function "cosf" cos_t the_module 
+  in
+  let pow_t =
+    L.function_type f32_t [| f32_t; f32_t |] 
+  in
+  let pow_func = 
+    L.declare_function "powf" pow_t the_module 
+  in
 
   (* Define each function (arguments and return type) so we can call it *)
   let function_decls =
@@ -649,6 +667,31 @@ let translate ((structs, pipelines, globals, functions) as program) =
                  L.build_fpext (expr builder e) f64_t "tmp" builder |]
               "printf" builder);
           builder
+       | SA.SCall (ret, "sin", [e]) ->
+          let e' = expr builder e in
+          let ret = lvalue builder ret in
+          let sin_e = 
+            L.build_call sin_func [| e' |]
+              "sin" builder
+          in
+	  ignore (L.build_store sin_e ret builder); builder 
+       | SA.SCall (ret, "cos", [e]) ->
+          let e' = expr builder e in
+          let ret = lvalue builder ret in
+          let cos_e = 
+            L.build_call cos_func [| e' |]
+              "cos" builder
+          in
+	  ignore (L.build_store cos_e ret builder); builder 
+       | SA.SCall (ret, "pow", [base; power]) ->
+          let base' = expr builder base in
+          let power' = expr builder power in
+          let ret = lvalue builder ret in
+          let pow_base_power = 
+            L.build_call pow_func [| base'; power' |]
+              "pow" builder
+          in
+	  ignore (L.build_store pow_base_power ret builder); builder 
       | SA.SCall (_, "printc", [e]) ->
           ignore
             (L.build_call printf_func [| char_format_str; (expr builder e) |]
@@ -721,7 +764,6 @@ let translate ((structs, pipelines, globals, functions) as program) =
            else lvalue builder e) fdecl.SA.sformals act) in
 	 let result = (match fdecl.SA.styp with A.Void -> ""
                                             | _ -> f ^ "_result") in
-
          let llret = L.build_call fdef (Array.of_list actuals) result builder in
          (match ret with
             (A.Void, SA.SNoexpr) -> ()
@@ -765,8 +807,6 @@ let translate ((structs, pipelines, globals, functions) as program) =
             (L.build_br body_bb);
 
           L.builder_at_end context merge_bb
-
-
     in
 
     if fdecl.SA.sfname = "main" then

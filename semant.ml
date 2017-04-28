@@ -201,6 +201,12 @@ let check program =
     let int1 = Mat(Int, 1, 1) and bool1 = Mat(Bool, 1, 1) and float1 =
         Mat(Float, 1, 1)
     and byte1 = Mat(Byte, 1, 1) in [
+     { typ = float1; fname = "sin"; formals = [In, (float1, "x")];
+       fqual = Both; body = [] };
+     { typ = float1; fname = "cos"; formals = [In, (float1, "x")];
+       fqual = Both; body = [] };
+      { typ = float1; fname = "pow"; formals = [In, (float1, "x"); In,
+      (float1, "y")]; fqual = Both; body = [] };
      { typ = Void; fname = "print"; formals = [In, (Array(byte1, None), "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printi"; formals = [In, (int1, "x")];
