@@ -727,7 +727,7 @@ let check program =
             | Array(t, Some s) -> handle_array_vec t s
             | Array(_, None) -> check_cons [Mat(Int, 1, 1)]
             | Buffer(t) -> check_buffer_type t; check_cons []
-            | Pipeline(_) -> check_cons []
+            | Pipeline(_) -> check_cons [Mat(Bool, 1, 1)]
             | Window -> check_cons [Mat(Int, 1, 1); Mat(Int, 1, 1); Mat(Bool, 1, 1)]
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));

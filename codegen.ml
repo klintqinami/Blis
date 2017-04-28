@@ -86,7 +86,9 @@ let translate ((structs, pipelines, globals, functions) as program) =
     (* index_buffer *)
     i32_t;
     (* program *)
-    i32_t
+    i32_t;
+    (* depth_func *)
+    i32_t;
   |] in
 
   (* construct struct types *)
@@ -158,7 +160,8 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let upload_buffer_func =
     L.declare_function "upload_buffer" upload_buffer_t the_module in
   let create_pipeline_t =
-    L.function_type void_t [| L.pointer_type pipeline_t; string_t; string_t |] in
+    L.function_type void_t [|
+      L.pointer_type pipeline_t; string_t; string_t; i32_t |] in
   let create_pipeline_func =
     L.declare_function "create_pipeline" create_pipeline_t the_module in
   let pipeline_bind_vertex_buffer_t = L.function_type void_t [|
@@ -648,6 +651,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 (ltype_of_typ t) s "" builder) 1 "" builder 
             | A.Buffer(_) -> L.build_call create_buffer_func [| |] "" builder
             | A.Pipeline(p) ->
+                let depth = List.hd act in
+                let depth' =
+                  L.build_zext (expr builder depth) i32_t "" builder
+                in
                 let pdecl = StringMap.find p pipeline_decls in
                 let fshader = StringMap.find pdecl.SA.sfshader shader_globals in
                 let vshader = StringMap.find pdecl.SA.svshader shader_globals in
@@ -655,7 +662,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
                 let v = L.build_gep vshader [| izero; izero |] "" builder in
                 let f = L.build_gep fshader [| izero; izero |] "" builder in
                 ignore
-                  (L.build_call create_pipeline_func [| tmp; v; f |] "" builder);
+                  (L.build_call create_pipeline_func [| tmp; v; f; depth' |] "" builder);
                 L.build_load tmp "" builder
             | A.Window ->
                 (match act with

@@ -14,6 +14,7 @@ struct pipeline {
   GLuint vertex_array;
   GLuint index_buffer;
   GLuint program;
+  GLuint depth_func;
 };
 
 GLuint compile_shader(const char *source, GLenum stage)
@@ -38,7 +39,8 @@ GLuint compile_shader(const char *source, GLenum stage)
 }
 
 void create_pipeline(struct pipeline *p,
-                     const char *vshader_source, const char *fshader_source)
+                     const char *vshader_source, const char *fshader_source,
+                     int enable_depth_test)
 {
   // compile shaders
   GLuint vshader = compile_shader(vshader_source, GL_VERTEX_SHADER);
@@ -65,6 +67,11 @@ void create_pipeline(struct pipeline *p,
 
   glGenVertexArrays(1, &p->vertex_array);
   p->index_buffer = 0;
+
+  if (enable_depth_test)
+    p->depth_func = GL_LEQUAL;
+  else
+    p->depth_func = GL_ALWAYS;
 }
 
 GLuint create_buffer(void)
@@ -280,6 +287,9 @@ void set_active_window(GLFWwindow *window)
     exit(1);
   }
 #endif 
+
+  // we always enable depth test
+  glEnable(GL_DEPTH_TEST);
 }
 
 void clear(float *color)
@@ -293,6 +303,7 @@ void draw_arrays(struct pipeline *p, int num_indices)
   glUseProgram(p->program);
   glBindVertexArray(p->vertex_array);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, p->index_buffer);
+  glDepthFunc(p->depth_func);
   if (p->index_buffer)
     glDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_INT, (void*)0);
   else

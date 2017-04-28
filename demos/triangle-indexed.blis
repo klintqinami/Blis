@@ -28,7 +28,7 @@ int main()
             vec3(0.,  1.,  0.)));
   upload_buffer(indices, int[3](0, 1, 2));
 
-  pipeline my_pipeline p = pipeline my_pipeline();
+  pipeline my_pipeline p = pipeline my_pipeline(false);
   p.pos = b;
   p.indices = indices;
 
