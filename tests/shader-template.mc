@@ -32,7 +32,7 @@ int main()
             vec3(-1., -1., 0.),
             vec3(-1., 1., 0.)));
 
-  pipeline my_pipeline p = pipeline my_pipeline();
+  pipeline my_pipeline p = pipeline my_pipeline(false);
   p.pos = b;
 
   draw(p, 6);

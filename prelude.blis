@@ -271,6 +271,11 @@ bool read_obj(u8[] fpath, out vec3[] verts, out int[] tris)
   return true;
 }
 
+@gpu float dot3(vec3 a, vec3 b)
+{
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
 // functions to build transformation matrices
 
 @gpu mat4x4 scale_x(float scale)

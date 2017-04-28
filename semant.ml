@@ -729,7 +729,7 @@ let check program =
             | Array(t, Some s) -> handle_array_vec t s
             | Array(_, None) -> check_cons [Mat(Int, 1, 1)]
             | Buffer(t) -> check_buffer_type t; check_cons []
-            | Pipeline(_) -> check_cons []
+            | Pipeline(_) -> check_cons [Mat(Bool, 1, 1)]
             | Window -> check_cons [Mat(Int, 1, 1); Mat(Int, 1, 1); Mat(Bool, 1, 1)]
             | _ -> raise (Failure ("unhandled type constructor for " ^
                       string_of_typ typ));
@@ -839,8 +839,12 @@ let check program =
 
     let env = { env with cur_qualifier = func.fqual } in
 
-    let env = List.fold_left (fun env (_, (t, s)) ->
-      fst (add_symbol_table env s t)) env func.formals
+    let env, formals = List.fold_left (fun (env, formals) (q, (t, s)) ->
+      let env, name = add_symbol_table env s t in
+      env, (q, (t, name)) :: formals) (env, []) func.formals
+    in
+
+    let formals = List.rev formals
     in
 
     let env, sbody = stmts' env [] func.body in
@@ -855,7 +859,7 @@ let check program =
       styp = func.typ;
       sfname = func.fname;
       sfqual = func.fqual;
-      sformals = func.formals;
+      sformals = formals;
       slocals = env.locals;
       sbody = List.rev sbody;
     }
