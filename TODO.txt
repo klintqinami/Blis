@@ -1,5 +1,5 @@
 Features:
-- special functions sin, cos, pow
+- floor and ceiling built ins
 - modulo binary operator
 - uniform matrices
 - add GLFW functions to read mouse position/click state
@@ -9,6 +9,8 @@ Broken things:
 - Check that types match for varying linking, more thoroughly test it
 - Inhibit access to global variables from gpu functions
 - Add support for inout parameters to entrypoints, or disallow them
+- Add builtin GLSL functions to backend to avoid name duplicates 
+  with user functions
 
 Wishlist:
 - multi-dimensional arrays
