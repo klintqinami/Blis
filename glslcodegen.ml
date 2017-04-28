@@ -62,7 +62,7 @@ let add_symbol_table table orig =
     "samplerBuffer"; "isamplerBuffer"; "usamplerBuffer";
     "sampler2DMS"; "isampler2DMS"; "usampler2DMS";
     "sampler2DMSArray"; "isampler2DMSArray"; "usampler2DMSArray";
-    "struct"]
+    "struct"; "sin"; "cos"; "pow"]
   in
 
   (* names starting with "gl_" are reserved in GLSL *)
@@ -286,6 +286,15 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           "(" ^ l' ^ ") = (" ^ r' ^ ");\n"
       | SA.SCall(ret, "length", [arr]) ->
           expr env ret ^ " = " ^ "(" ^ expr env arr ^ ").length();\n"
+      | SA.SCall (ret, "sin", [e]) ->
+          expr env ret ^ " = " ^ "sin(" ^ "(" ^ expr env e ^ ")" ^ ");\n"
+      | SA.SCall (ret, "cos", [e]) ->
+          expr env ret ^ " = " ^ "cos(" ^ "(" ^ expr env e ^ ")" ^ ");\n"
+      | SA.SCall (ret, "pow", [base; power]) ->
+          let base' = expr env base in
+          let power' = expr env power in
+          expr env ret ^ " = " ^ "pow(" ^ "(" ^ base' ^ ") , " ^ 
+                 "(" ^ power' ^ ") );\n"
       | SA.SCall((A.Void, SA.SNoexpr), name, elist) ->
           let elist' = expr_list env elist
           in
@@ -297,7 +306,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           in
            ret ^ " = " ^ StringMap.find name func_table.scope ^ "(" ^ elist' ^
            ");\n"
-      | SA.SReturn(e) -> let e' = expr env e in
+     | SA.SReturn(e) -> let e' = expr env e in
           if env.cur_qualifier = A.Vertex then
             "gl_Position = " ^ e' ^ ";\nreturn;\n"
           else
