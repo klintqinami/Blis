@@ -899,8 +899,8 @@ let check program =
   let cpu_functions = List.filter (fun fdecl ->
     fdecl.sfqual = CpuOnly) functions
   in
-  let gpu_functions = tsort gpu_functions func_succs (fun cycle ->
+  let gpu_functions = List.rev (tsort gpu_functions func_succs (fun cycle ->
     raise (Failure ("recursive call by not-CPU-only functions: " ^
-      String.concat " -> " (List.map (fun f -> f.sfname) cycle))))
+      String.concat " -> " (List.map (fun f -> f.sfname) cycle)))))
   in
   (structs, pipelines, globals, gpu_functions @ cpu_functions)
