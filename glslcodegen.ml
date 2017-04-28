@@ -62,7 +62,7 @@ let add_symbol_table table orig =
     "samplerBuffer"; "isamplerBuffer"; "usamplerBuffer";
     "sampler2DMS"; "isampler2DMS"; "usampler2DMS";
     "sampler2DMSArray"; "isampler2DMSArray"; "usampler2DMSArray";
-    "struct"; "sin"; "cos"; "pow"]
+    "struct"; "sin"; "cos"; "pow"; "sqrt"; "floor"]
   in
 
   (* names starting with "gl_" are reserved in GLSL *)
@@ -290,6 +290,10 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
           expr env ret ^ " = " ^ "sin(" ^ "(" ^ expr env e ^ ")" ^ ");\n"
       | SA.SCall (ret, "cos", [e]) ->
           expr env ret ^ " = " ^ "cos(" ^ "(" ^ expr env e ^ ")" ^ ");\n"
+      | SA.SCall (ret, "sqrt", [e]) ->
+          expr env ret ^ " = " ^ "sqrt(" ^ "(" ^ expr env e ^ ")" ^ ");\n"
+       | SA.SCall (ret, "floor", [e]) ->
+          expr env ret ^ " = " ^ "floor(" ^ "(" ^ expr env e ^ ")" ^ ");\n"
       | SA.SCall (ret, "pow", [base; power]) ->
           let base' = expr env base in
           let power' = expr env power in

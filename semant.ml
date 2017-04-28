@@ -205,8 +205,12 @@ let check program =
        fqual = Both; body = [] };
      { typ = float1; fname = "cos"; formals = [In, (float1, "x")];
        fqual = Both; body = [] };
-      { typ = float1; fname = "pow"; formals = [In, (float1, "x"); In,
+     { typ = float1; fname = "pow"; formals = [In, (float1, "x"); In,
       (float1, "y")]; fqual = Both; body = [] };
+     { typ = float1; fname = "sqrt"; formals = [In, (float1, "x")];
+       fqual = Both; body = [] };
+     { typ = float1; fname = "floor"; formals = [In, (float1, "x")];
+       fqual = Both; body = [] };
      { typ = Void; fname = "print"; formals = [In, (Array(byte1, None), "x")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "printi"; formals = [In, (int1, "x")];

@@ -247,6 +247,18 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let pow_func = 
     L.declare_function "powf" pow_t the_module 
   in
+  let sqrt_t = 
+    L.function_type f32_t [| f32_t |]
+  in
+  let sqrt_func =
+    L.declare_function "sqrtf" sqrt_t the_module
+  in
+  let floor_t =
+    L.function_type f32_t [| f32_t |]
+  in
+  let floor_func =
+    L.declare_function "floorf" floor_t the_module
+  in
 
   (* Define each function (arguments and return type) so we can call it *)
   let function_decls =
@@ -711,6 +723,22 @@ let translate ((structs, pipelines, globals, functions) as program) =
               "cos" builder
           in
 	  ignore (L.build_store cos_e ret builder); builder 
+       | SA.SCall (ret, "sqrt", [e]) ->
+          let e' = expr builder e in
+          let ret = lvalue builder ret in
+          let sqrt_e = 
+            L.build_call sqrt_func [| e' |]
+              "sqrt" builder
+          in
+	  ignore (L.build_store sqrt_e ret builder); builder 
+        | SA.SCall (ret, "floor", [e]) ->
+          let e' = expr builder e in
+          let ret = lvalue builder ret in
+          let floor_e = 
+            L.build_call floor_func [| e' |]
+              "floor" builder
+          in
+	  ignore (L.build_store floor_e ret builder); builder 
        | SA.SCall (ret, "pow", [base; power]) ->
           let base' = expr builder base in
           let power' = expr builder power in
