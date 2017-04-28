@@ -1,6 +1,6 @@
 Features:
 - add GLFW functions to read mouse position/click state
-- support for equality (Klint?)
+- extend and test comparators in GLSL backend
 
 Broken things:
 - Check that types match for varying linking, more thoroughly test it

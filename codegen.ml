@@ -440,8 +440,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
       | SA.SBinop (e1, op, e2) ->
           let e1' = expr builder e1
 	  and e2' = expr builder e2 in
-          let e1cols, e1rows, e2cols, e2rows = match fst e1, fst e2 with
-                | A.Mat(_, w, l), A.Mat(_, w', l') -> w, l, w', l'
+          let e1basetype, e2basetype, e1cols, e1rows, e2cols, e2rows = match fst e1, fst e2 with
+                | A.Mat(b, w, l), A.Mat(b', w', l') -> 
+                    (ltype_of_typ (A.Mat(b, 1, 1))), (ltype_of_typ (A.Mat(b',
+                    1, 1))), w, l, w', l'
                 | _ -> raise (Failure "shouldn't get here");
           in
           let base_type, llvbase_type, cols, rows = match fst sexpr with
@@ -576,36 +578,61 @@ let translate ((structs, pipelines, globals, functions) as program) =
             per_component_builder L.build_fmul 
               (scalar_expander e1 cols rows str builder) e2 str builder
           in
+          let vec_vec_comparator op1 op2 vec1 vec2 str builder =
+            let truth_start = L.const_int i1_t 1 in
+            List.fold_left (fun acc row ->
+               let val1 = L.build_extractvalue vec1 row str builder in
+               let val2 = L.build_extractvalue vec2 row str builder in
+               let comp12 = op1 op2 val1 val2 "vecl" builder in
+               L.build_and acc comp12 "vecb" builder) truth_start (range 0 e1rows)
+          in
+          let mat_mat_comparator op1 op2 mat1 mat2 str builder = 
+            let truth_start = L.const_int i1_t 1 in
+            List.fold_left (fun acc col ->
+               let vec1 = L.build_extractvalue mat1 col str builder in
+               let vec2 = L.build_extractvalue mat2 col str builder in
+               let comp12 = vec_vec_comparator op1 op2 vec1 vec2 "vec" builder in
+               L.build_and acc comp12 "mat" builder) truth_start (range 0 e1cols)
+          in
+          let component_comparator op1 op2 e1 e2 str builder =
+              let mat1 = 
+                twod_array_wrap e1 e1cols e1rows e1basetype str builder
+              in
+              let mat2 = 
+                twod_array_wrap e2 e2cols e2rows e2basetype str builder
+              in
+              mat_mat_comparator op1 op2 mat1 mat2 str builder 
+          in
 	  (match op with
 	    SA.IAdd     -> per_component_builder L.build_add
 	  | SA.ISub     -> per_component_builder L.build_sub
 	  | SA.IMult    -> per_component_builder L.build_mul
           | SA.IMod     -> per_component_builder L.build_srem
           | SA.IDiv     -> per_component_builder L.build_sdiv
-	  | SA.IEqual   -> L.build_icmp L.Icmp.Eq
-	  | SA.INeq     -> L.build_icmp L.Icmp.Ne
-	  | SA.ILess    -> L.build_icmp L.Icmp.Slt
-	  | SA.ILeq     -> L.build_icmp L.Icmp.Sle
-	  | SA.IGreater -> L.build_icmp L.Icmp.Sgt
-	  | SA.IGeq     -> L.build_icmp L.Icmp.Sge
+	  | SA.IEqual   -> component_comparator L.build_icmp L.Icmp.Eq
+	  | SA.INeq     -> component_comparator L.build_icmp L.Icmp.Ne
+	  | SA.ILess    -> component_comparator L.build_icmp L.Icmp.Slt
+	  | SA.ILeq     -> component_comparator L.build_icmp L.Icmp.Sle
+	  | SA.IGreater -> component_comparator L.build_icmp L.Icmp.Sgt
+	  | SA.IGeq     -> component_comparator L.build_icmp L.Icmp.Sge
           | SA.FAdd     -> per_component_builder L.build_fadd
           | SA.FSub     -> per_component_builder L.build_fsub
           | SA.FMult    -> per_component_builder L.build_fmul
           | SA.FDiv     -> per_component_builder L.build_fdiv
           | SA.FMatMult -> fmat_mult 
           | SA.Splat    -> splat_mult
-	  | SA.FEqual   -> L.build_fcmp L.Fcmp.Oeq
-	  | SA.FNeq     -> L.build_fcmp L.Fcmp.One
-	  | SA.FLess    -> L.build_fcmp L.Fcmp.Olt
-	  | SA.FLeq     -> L.build_fcmp L.Fcmp.Ole
-	  | SA.FGreater -> L.build_fcmp L.Fcmp.Ogt
-	  | SA.FGeq     -> L.build_fcmp L.Fcmp.Oge
-          | SA.U8Equal  -> L.build_icmp L.Icmp.Eq
-          | SA.U8Neq    -> L.build_icmp L.Icmp.Ne
-	  | SA.BAnd     -> L.build_and
-	  | SA.BOr      -> L.build_or
-	  | SA.BEqual   -> L.build_icmp L.Icmp.Eq
-	  | SA.BNeq     -> L.build_icmp L.Icmp.Ne
+	  | SA.FEqual   -> component_comparator L.build_fcmp L.Fcmp.Oeq
+	  | SA.FNeq     -> component_comparator L.build_fcmp L.Fcmp.One
+	  | SA.FLess    -> component_comparator L.build_fcmp L.Fcmp.Olt
+	  | SA.FLeq     -> component_comparator L.build_fcmp L.Fcmp.Ole
+	  | SA.FGreater -> component_comparator L.build_fcmp L.Fcmp.Ogt
+	  | SA.FGeq     -> component_comparator L.build_fcmp L.Fcmp.Oge
+          | SA.U8Equal  -> component_comparator L.build_icmp L.Icmp.Eq
+          | SA.U8Neq    -> component_comparator L.build_icmp L.Icmp.Ne
+	  | SA.BAnd     -> per_component_builder L.build_and
+	  | SA.BOr      -> per_component_builder L.build_or
+	  | SA.BEqual   -> component_comparator L.build_icmp L.Icmp.Eq
+	  | SA.BNeq     -> component_comparator L.build_icmp L.Icmp.Ne
 	  ) e1' e2' "tmp" builder
       | SA.SUnop(op, e) ->
 	  let e' = expr builder e in

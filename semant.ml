@@ -523,22 +523,38 @@ let check program =
                      -> (Mat(Float, w, l), Splat)
           | Div,     Mat(Float, 1, l), Mat(Float, 1, l') when l = l'
                      -> (Mat(Float, 1, l), FDiv)
-          | Equal,   Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FEqual)
-          | Neq,     Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FNeq)
-          | Less,    Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FLess)
-          | Leq,     Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FLeq)
-          | Greater, Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FGreater)
-          | Geq,     Mat(Float, 1, 1), Mat(Float, 1, 1) -> (Mat(Bool, 1, 1), FGeq)
-          | Equal,   Mat(Bool, 1, 1),  Mat(Bool, 1, 1)  -> (Mat(Bool, 1, 1), BEqual)
-          | Neq,     Mat(Bool, 1, 1),  Mat(Bool, 1, 1)  -> (Mat(Bool, 1, 1), BNeq)
-          | Less,    Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), ILess)
-          | Leq,     Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), ILeq)
-          | Greater, Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), IGreater)
-          | Geq,     Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), IGeq)
-          | And,     Mat(Bool, 1, 1),  Mat(Bool, 1, 1)  -> (Mat(Bool, 1, 1), BAnd)
-          | Or,      Mat(Bool, 1, 1),  Mat(Bool, 1, 1)  -> (Mat(Bool, 1, 1), BOr)
-          | Equal,   Mat(Byte, 1, 1),  Mat(Byte, 1, 1)  -> (Mat(Bool, 1, 1), U8Equal)
-          | Neq,     Mat(Byte, 1, 1),  Mat(Byte, 1, 1)  -> (Mat(Bool, 1, 1), U8Neq)
+          | Equal,   Mat(Float, w, l), Mat(Float, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), FEqual)
+          | Neq,     Mat(Float, w, l), Mat(Float, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), FNeq)
+          | Less,    Mat(Float, w, l), Mat(Float, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), FLess)
+          | Leq,     Mat(Float, w, l), Mat(Float, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), FLeq)
+          | Greater, Mat(Float, w, l), Mat(Float, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), FGreater)
+          | Geq,     Mat(Float, w, l), Mat(Float, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), FGeq)
+          | Equal,   Mat(Bool, w, l),  Mat(Bool, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), BEqual)
+          | Neq,     Mat(Bool, w, l),  Mat(Bool, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), BNeq)
+          | Less,    Mat(Int, w, l),   Mat(Int, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), ILess)
+          | Leq,     Mat(Int, w, l),   Mat(Int, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), ILeq)
+          | Greater, Mat(Int, w, l),   Mat(Int, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), IGreater)
+          | Geq,     Mat(Int, w, l),   Mat(Int, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), IGeq)
+          | And,     Mat(Bool, w, l),  Mat(Bool, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, w, l), BAnd)
+          | Or,      Mat(Bool, w, l),  Mat(Bool, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, w, l), BOr)
+          | Equal,   Mat(Byte, w, l),  Mat(Byte, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), U8Equal)
+          | Neq,     Mat(Byte, w, l),  Mat(Byte, w', l') when l = l' && w = w'
+                     -> (Mat(Bool, 1, 1), U8Neq)
           | _ -> raise (Failure ("illegal binary operator " ^
                 string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
                 string_of_typ t2 ^ " in " ^ string_of_expr e))
