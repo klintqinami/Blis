@@ -230,6 +230,9 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = Array(byte1, None); fname = "read_file";
        formals = [In, (Array(byte1, None), "file")]; fqual = CpuOnly; body = [] };
+     { typ = Void; fname = "clear";
+       formals = [In, (Mat(Float, 1, 4), "color")]; fqual = CpuOnly; body = []
+     };
      (* these builtins have type-checking rules not captured through the normal
       * mechanism, so they are special-cased below. Add them here to make sure
       * the program doesn't declare another function with the same name;

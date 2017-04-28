@@ -203,6 +203,11 @@ let translate ((structs, pipelines, globals, functions) as program) =
   let draw_arrays_t = L.function_type void_t [| L.pointer_type pipeline_t; i32_t |] in
   let draw_arrays_func =
     L.declare_function "draw_arrays" draw_arrays_t the_module in
+  let clear_t =
+    L.function_type void_t
+      [| L.pointer_type (L.array_type f32_t 4) |] in
+  let clear_func =
+    L.declare_function "clear" clear_t the_module in
   let swap_buffers_t = L.function_type void_t [| voidp_t |] in
   let swap_buffers_func =
     L.declare_function "glfwSwapBuffers" swap_buffers_t the_module in
@@ -738,6 +743,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
           ignore (L.build_call upload_buffer_func
             [| buf'; data'; size;
                L.const_int i32_t 0x88E4 (* GL_STATIC_DRAW *) |] "" builder);
+          builder
+      | SA.SCall (_, "clear", [c]) ->
+          let c' = lvalue builder c in
+          ignore (L.build_call clear_func [| c' |] "" builder);
           builder
       | SA.SCall (_, "draw", [p; i]) ->
           let p' = lvalue builder p in

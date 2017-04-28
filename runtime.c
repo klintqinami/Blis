@@ -282,6 +282,12 @@ void set_active_window(GLFWwindow *window)
 #endif 
 }
 
+void clear(float *color)
+{
+  glClearColor(color[0], color[1], color[2], color[3]);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
 void draw_arrays(struct pipeline *p, int num_indices)
 {
   glUseProgram(p->program);
