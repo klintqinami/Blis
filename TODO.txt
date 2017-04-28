@@ -1,5 +1,4 @@
 Features:
-- modulo binary operator
 - add GLFW functions to read mouse position/click state
 - support for equality (Klint?)
 
