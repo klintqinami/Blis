@@ -1,5 +1,4 @@
 Features:
-- modulo binary operator
 - add GLFW functions to read mouse position/click state
 - support for equality (Klint?)
 
@@ -7,8 +6,6 @@ Broken things:
 - Check that types match for varying linking, more thoroughly test it
 - Inhibit access to global variables from gpu functions
 - Add support for inout parameters to entrypoints, or disallow them
-- Add builtin GLSL functions to backend to avoid name duplicates 
-  with user functions
 
 Wishlist:
 - multi-dimensional arrays

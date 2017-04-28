@@ -2,7 +2,7 @@
 
 open Ast
 
-type sop = IAdd | ISub | IMult | IDiv
+type sop = IAdd | ISub | IMult | IDiv | IMod
          | IEqual | INeq | ILess | ILeq | IGreater | IGeq
          | FAdd | FSub | FMult | FDiv | FMatMult | Splat
          | FEqual | FNeq | FLess | FLeq | FGreater | FGeq
@@ -86,6 +86,7 @@ let string_of_sop = function
     IAdd | FAdd -> "+"
   | ISub | FSub -> "-"
   | IMult | FMult | FMatMult | Splat -> "*"
+  | IMod -> "%"
   | IDiv | FDiv -> "/"
   | IEqual | BEqual | FEqual | U8Equal -> "=="
   | INeq | BNeq | FNeq | U8Neq -> "!="
