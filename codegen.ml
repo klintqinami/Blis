@@ -291,6 +291,18 @@ let translate ((structs, pipelines, globals, functions) as program) =
                    with Not_found -> StringMap.find n global_vars
     in
 
+    (* Given a pointer to matrix of a given type, return a pointer to the first
+     * element.
+     *)
+    let mat_first_elem ptr cols rows builder =
+      if cols = 1 && rows = 1 then
+        ptr
+      else if cols = 1 || rows = 1 then
+        L.build_gep ptr [| izero; izero |] "" builder
+      else
+        L.build_gep ptr [| izero; izero; izero |] "" builder
+    in
+
     (* evaluates an expression and returns a pointer to its value. If the
      * expression is an lvalue, guarantees that the pointer is to the memory
      * referenced by the lvalue.
@@ -314,11 +326,16 @@ let translate ((structs, pipelines, globals, functions) as program) =
                   | _ -> raise (Failure "shouldn't get here"))|]
                   "tmp" builder
             | A.Pipeline(_) ->
-                (* currently we can only get here by setting the index buffer,
-                 * which is just a normal member of the internal pipeline
-                 * struct.
-                 *)
-                L.build_struct_gep e' 1 "tmp" builder
+                if m = "indices" then
+                  L.build_struct_gep e' 1 "tmp" builder
+                else
+                  (* we can only get here when getting uniform/input variables,
+                   * since handle_assign() takes care of the other cases.
+                   *)
+                  let tmp = L.build_alloca (ltype_of_typ (fst sexpr)) "" builder
+                  in
+                  ignore (L.build_store (expr builder sexpr) tmp builder);
+                  tmp
             | _ -> raise (Failure "unexpected type"))
       | SA.SArrayDeref (e, i) ->
           let e' = lvalue builder e in
@@ -352,11 +369,10 @@ let translate ((structs, pipelines, globals, functions) as program) =
               lval'; L.build_global_stringptr m "" builder |] "" builder in
             ignore (match b with
                 A.Float -> L.build_call pipeline_set_uniform_float_func [|
-                  lval'; loc; L.build_gep e' [| izero; izero; izero |] "" builder;
+                  lval'; loc; mat_first_elem e' c n builder;
                   L.const_int i32_t n; L.const_int i32_t c |] "" builder
               | A.Int -> L.build_call pipeline_set_uniform_int_func [|
-                  lval'; loc;
-                  L.build_gep e' [| izero; izero; izero |] "" builder;
+                  lval'; loc; mat_first_elem e' c n builder;
                   L.const_int i32_t n; L.const_int i32_t c |] "" builder
               | A.Bool -> raise (Failure "unimplemented boolean uniforms")
               | _ -> raise (Failure "unimplemented"));
@@ -387,15 +403,13 @@ let translate ((structs, pipelines, globals, functions) as program) =
               e'; L.build_global_stringptr m "" builder |] "" builder in
             let tmp = L.build_alloca (ltype_of_typ (fst sexpr)) "" builder in
             ignore (match fst sexpr with
-                A.Mat(A.Float, _, _) ->
+                A.Mat(A.Float, c, r) ->
                   L.build_call pipeline_get_uniform_float_func [|
-                    e'; loc;
-                    L.build_gep tmp [| izero; izero; izero |] "" builder |]
+                    e'; loc; mat_first_elem tmp c r builder |]
                   "" builder
-              | A.Mat(A.Int, _, _) ->
+              | A.Mat(A.Int, c, r) ->
                   L.build_call pipeline_get_uniform_int_func [|
-                    e'; loc;
-                    L.build_gep tmp [| izero; izero |] "" builder |]
+                    e'; loc; mat_first_elem tmp c r builder |]
                   "" builder
               | A.Mat(A.Bool, _, _) ->
                   raise (Failure "unimplemented boolean uniforms")
