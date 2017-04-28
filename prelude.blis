@@ -276,6 +276,23 @@ bool read_obj(u8[] fpath, out vec3[] verts, out int[] tris)
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+@gpu vec3 cross(vec3 a, vec3 b)
+{
+  return vec3(a.y * b.z - a.z * b.y,
+              a.z * b.x - a.x * b.z,
+              a.x * b.y - a.y * b.x);
+}
+
+@gpu float norm3(vec3 x)
+{
+  return sqrt(dot3(x, x));
+}
+
+@gpu vec3 normalize3(vec3 x)
+{
+  return x * (1.0 / norm3(x));
+}
+
 // functions to build transformation matrices
 
 @gpu mat4x4 scale_x(float scale)
