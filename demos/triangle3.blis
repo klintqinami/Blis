@@ -29,12 +29,26 @@ int main()
 
   pipeline my_pipeline p = pipeline my_pipeline();
   p.pos = b;
-  p.xform = mat4x4(vec4(0.7, 0., 0., 0.),
-                   vec4(0., 0.7, 0., 0.),
-                   vec4(0., 0., 1., 0.),
-                   vec4(0., 0., 0., 1.));
+  float scale = 0.7;
+  bool increasing = true;
+  p.xform = scale_x(scale) * scale_y(scale);
 
   while (true) {
+    if (increasing) {
+      scale = scale + 0.005;
+      if (scale > 1.0) {
+        scale = 1.0;
+        increasing = false;
+      }
+    } else {
+      scale = scale - 0.005;
+      if (scale < 0.5) {
+        scale = 0.5;
+        increasing = true;
+      }
+    }
+    p.xform = scale_x(scale) * scale_y(scale);
+    clear(vec4(0., 0., 0., 1.));
     draw(p, 3);
     swap_buffers(win);
     poll_events();
