@@ -17,7 +17,7 @@ pipeline my_pipeline foo;
 
 @gpuonly void bar()
 {
-  bind_pipeline(foo);
+  draw(foo, 1);
 }
 
 int main()

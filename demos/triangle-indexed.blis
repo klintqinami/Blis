@@ -3,9 +3,9 @@
   return vec4(pos.x, pos.y, pos.z, 1.);
 }
 
-@fragment void fshader(uniform vec3 u_color, out vec3 color)
+@fragment void fshader(out vec3 color)
 {
-  color = u_color;
+  color = vec3(1., 0., 1.);
 }
 
 pipeline my_pipeline {
@@ -20,33 +20,19 @@ int main()
   set_active_window(win);
 
   buffer<vec3> b = buffer<vec3>();
+  buffer<int> indices = buffer<int>();
 
   upload_buffer(b,
     vec3[3](vec3(-1., -1., 0.),
             vec3(1.,  -1., 0.),
             vec3(0.,  1.,  0.)));
+  upload_buffer(indices, int[3](0, 1, 2));
 
   pipeline my_pipeline p = pipeline my_pipeline();
   p.pos = b;
-  vec3 color = vec3(0., 0.5, 0.5);
-  bool increasing = true;
+  p.indices = indices;
 
   while (true) {
-    if (increasing) {
-      color.x = color.x + 0.05;
-      if (color.x > 1.0) {
-        color.x = 1.0;
-        increasing = false;
-      }
-    } else {
-      color.x = color.x - 0.05;
-      if (color.x < 0.0) {
-        color.x = 0.0;
-        increasing = true;
-      }
-    }
-
-    p.u_color = color;
     draw(p, 3);
     swap_buffers(win);
     poll_events();

@@ -12,6 +12,7 @@
 
 struct pipeline {
   GLuint vertex_array;
+  GLuint index_buffer;
   GLuint program;
 };
 
@@ -63,6 +64,7 @@ void create_pipeline(struct pipeline *p,
   }
 
   glGenVertexArrays(1, &p->vertex_array);
+  p->index_buffer = 0;
 }
 
 GLuint create_buffer(void)
@@ -230,12 +232,6 @@ void pipeline_get_uniform_int(struct pipeline *p, int location,
   glGetUniformiv(p->program, location, values);
 }
 
-void bind_pipeline(struct pipeline *p)
-{
-  glUseProgram(p->program);
-  glBindVertexArray(p->vertex_array);
-}
-
 void read_pixel(int x, int y, float *pixel)
 {
   glReadPixels(x, y, 1, 1, GL_RGBA, GL_FLOAT, pixel);
@@ -286,8 +282,14 @@ void set_active_window(GLFWwindow *window)
 #endif 
 }
 
-void draw_arrays(int num_indices)
+void draw_arrays(struct pipeline *p, int num_indices)
 {
+  glUseProgram(p->program);
+  glBindVertexArray(p->vertex_array);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, p->index_buffer);
+  if (p->index_buffer)
+    glDrawElements(GL_TRIANGLES, num_indices, GL_UNSIGNED_INT, (void*)0);
+  else
     glDrawArrays(GL_TRIANGLES, 0, num_indices); /* Go! */
 }
 

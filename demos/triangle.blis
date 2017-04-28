@@ -30,8 +30,7 @@ int main()
   p.pos = b;
 
   while (true) {
-    bind_pipeline(p);
-    draw_arrays(3);
+    draw(p, 3);
     swap_buffers(win);
     poll_events();
     if (window_should_close(win))

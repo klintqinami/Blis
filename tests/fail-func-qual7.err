@@ -1,1 +1,1 @@
-Fatal error: exception Failure("cannot call @cpuonly function bind_pipeline from @gpuonly function bar")
+Fatal error: exception Failure("cannot call @cpuonly function draw from @gpuonly function bar")

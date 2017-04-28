@@ -93,7 +93,7 @@ let check program =
   in
 
   let check_buffer_type = function
-      Mat(Float, 1, _) -> ()
+      Mat(Float, 1, _) | Mat(Int, 1, _) -> ()
     | _ as t -> raise (Failure ("bad type " ^ string_of_typ t ^ " for buffer"))
   in
 
@@ -219,8 +219,6 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "set_active_window"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
-     { typ = Void; fname = "draw_arrays"; formals = [In, (int1, "n")];
-       fqual = CpuOnly; body = [] };
      { typ = Void; fname = "swap_buffers"; formals = [In, (Window, "w")];
        fqual = CpuOnly; body = [] };
      { typ = Void; fname = "poll_events"; formals = [];
@@ -240,7 +238,7 @@ let check program =
      { typ = Void; fname = "length"; formals = []; fqual = Both; body = [] };
      { typ = Void; fname = "upload_buffer"; formals = []; fqual = CpuOnly;
        body = [] };
-     { typ = Void; fname = "bind_pipelline"; formals = []; fqual = CpuOnly;
+     { typ = Void; fname = "draw"; formals = []; fqual = CpuOnly;
        body = [] };
     ]
   in
@@ -307,12 +305,18 @@ let check program =
             else Some vtyp') vuniforms funiforms in
         let uniforms_list = List.map (fun (name, typ) -> (typ, name))
           (StringMap.bindings uniforms) in
+        let inputs_list = List.map (fun (_, (t, n)) -> (Buffer(t), n))
+          (List.filter (fun (qual, _) -> qual = In) vert_decl.formals) in
+        let pipeline_members =
+          (Buffer(Mat(Int, 1, 1)), "indices") :: uniforms_list @ inputs_list in
+        report_duplicate (fun n -> "duplicate member " ^ n ^ " of pipeline " ^
+          pd.pname) (List.map snd pipeline_members);
         { spname = pd.pname;
           sfshader = pd.fshader;
           svshader = pd.vshader;
-          sinputs = List.map (fun (_, (t, n)) -> (Buffer(t), n))
-            (List.filter (fun (qual, _) -> qual = In) vert_decl.formals);
+          sinputs = inputs_list;
           suniforms = uniforms_list;
+          smembers = pipeline_members;
         })
   pipelines
   in
@@ -341,7 +345,8 @@ let check program =
             func.fname ^ " which is not an entrypoint"))
         else
           match typ with
-              Mat(_, 1, _) -> ()
+              Mat(Float, _, _) -> ()
+            | Mat(Int, 1, _) -> ()
             | _ -> raise (Failure ("illegal type " ^ string_of_typ typ ^
               " used in a uniform argument in " ^ func.fname)))
     func.formals;
@@ -375,16 +380,30 @@ let check program =
       let ltyp = fst lval and rtyp = fst rval in
       let array_assign t =
         let int1 = Mat(Int, 1, 1) and bool1 = Mat(Bool, 1, 1) in
-        let env, index = add_tmp env int1 in
-        let stmts = SAssign(index, (int1, SIntLit(0))) :: stmts in
-        let env, length = add_tmp env int1 in
-        let stmts = SCall(length, "length", [rval]) :: stmts in
-        let stmts = if ltyp = Array(t, None) then
-          SAssign(lval, (ltyp, STypeCons([length]))) :: stmts else stmts in
-        let env, stmt' = check_assign env (int1, SArrayDeref(lval, index))
-          (int1, SArrayDeref(rval, index)) [] fail in
-        env, SLoop(SIf((bool1, SBinop(length, ILeq, index)), [SBreak], []) :: List.rev stmt',
-        [SAssign(index, (int1, SBinop(index, IAdd, (int1, SIntLit(1)))))]) :: stmts in
+        match snd rval with
+            STypeCons(_) when ltyp = rtyp ->
+              (* in this special case, we're just allocating a new array, and
+               * copying the RHS in a loop would mean repeatedly allocating
+               * memory -- which is silly. We know that the types match exactly,
+               * and there are no aliasing concerns since no other name exists
+               * for this chunk of memory. Therefore we just do a simple
+               * assignment and move on.
+               *)
+              env, SAssign(lval, rval) :: stmts
+          | _ ->
+            let env, index = add_tmp env int1 in
+            let stmts = SAssign(index, (int1, SIntLit(0))) :: stmts in
+            let env, length = add_tmp env int1 in
+            let stmts = SCall(length, "length", [rval]) :: stmts in
+            let stmts = if ltyp = Array(t, None) then
+              SAssign(lval, (ltyp, STypeCons([length]))) :: stmts else stmts in
+            let env, stmt' = check_assign env (int1, SArrayDeref(lval, index))
+              (int1, SArrayDeref(rval, index)) [] fail in
+            env, SLoop(
+              SIf((bool1, SBinop(length, ILeq, index)), [SBreak], []) ::
+                List.rev stmt',
+              [SAssign(index, (int1, SBinop(index, IAdd, (int1, SIntLit(1)))))])
+            :: stmts in
       match (ltyp, rtyp) with
         (Array(t, i), Array(_, i')) when i = i' -> array_assign t       
       | (Array(t, Some _), Array(_, None)) | (Array(t, None), Array(_, Some _)) ->
@@ -417,13 +436,10 @@ let check program =
             | Pipeline p ->
                 let ptype = StringMap.find p pipeline_decls in
                 (try
-                  fst (List.find (fun b -> snd b = m) ptype.sinputs)
+                  fst (List.find (fun b -> snd b = m) ptype.smembers)
                 with Not_found ->
-                  (try
-                    fst (List.find (fun b -> snd b = m) ptype.suniforms)
-                  with Not_found ->
-                    raise (Failure ("pipeline " ^ p ^ " does not contain " ^
-                      m ^ " in " ^ string_of_expr d))))
+                  raise (Failure ("pipeline " ^ p ^ " does not contain " ^
+                    m ^ " in " ^ string_of_expr d)))
             | Mat(b, 1, w) ->
                 (match m with
                     "x" | "y" when w >= 2 -> Mat(b, 1, 1)
@@ -585,14 +601,14 @@ let check program =
             | _ -> raise (Failure ("first parameter to upload_buffer must be " ^
                     "a buffer in " ^ string_of_expr call))) :: stmts,
           (Void, SNoexpr)
-      | Call("bind_pipeline", [p]) as call ->
-          check_call_qualifiers env "bind_pipeline" CpuOnly;
+      | Call("draw", [p; i]) as call ->
+          check_call_qualifiers env "draw" CpuOnly;
           let env, stmts, p' = expr env stmts p in
-          env, (match fst p' with
-              Pipeline(_) ->
-                SCall((Void, SNoexpr), "bind_pipeline", [p'])
-            | _ as t -> raise (Failure ("calling bind_pipeline with " ^
-              string_of_typ t ^ " instead of pipeline in " ^ 
+          let env, stmts, i' = expr env stmts i in
+          env, (match fst p', fst i' with
+              Pipeline(_), Mat(Int, 1, 1) ->
+                SCall((Void, SNoexpr), "draw", [p'; i'])
+            | _ -> raise (Failure ("invalid arguments to draw() in " ^
               string_of_expr call))) :: stmts,
           (Void, SNoexpr)
       | Call(fname, actuals) as call -> let fd = function_decl fname in

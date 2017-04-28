@@ -1,11 +1,12 @@
-@vertex vec4 vshader(vec3 pos)
+@vertex vec4 vshader(uniform mat4x4 xform, vec3 pos)
 {
-  return vec4(pos.x, pos.y, pos.z, 1.);
+  vec4 pos = vec4(pos.x, pos.y, pos.z, 1.);
+  return xform * pos;
 }
 
-@fragment void fshader(uniform vec3 u_color, out vec3 color)
+@fragment void fshader(out vec3 color)
 {
-  color = u_color;
+  color = vec3(1., 0., 1.);
 }
 
 pipeline my_pipeline {
@@ -28,25 +29,12 @@ int main()
 
   pipeline my_pipeline p = pipeline my_pipeline();
   p.pos = b;
-  vec3 color = vec3(0., 0.5, 0.5);
-  bool increasing = true;
+  p.xform = mat4x4(vec4(0.7, 0., 0., 0.),
+                   vec4(0., 0.7, 0., 0.),
+                   vec4(0., 0., 1., 0.),
+                   vec4(0., 0., 0., 1.));
 
   while (true) {
-    if (increasing) {
-      color.x = color.x + 0.05;
-      if (color.x > 1.0) {
-        color.x = 1.0;
-        increasing = false;
-      }
-    } else {
-      color.x = color.x - 0.05;
-      if (color.x < 0.0) {
-        color.x = 0.0;
-        increasing = true;
-      }
-    }
-
-    p.u_color = color;
     draw(p, 3);
     swap_buffers(win);
     poll_events();
