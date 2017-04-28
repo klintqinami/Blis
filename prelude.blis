@@ -271,34 +271,131 @@ bool read_obj(u8[] fpath, out vec3[] verts, out int[] tris)
   return true;
 }
 
+@gpu float deg_to_rad(float x)
+{
+  return x * 0.017453293;
+}
+
+@gpu float tan(float x)
+{
+  return sin(x) / cos(x);
+}
+
 @gpu float dot3(vec3 a, vec3 b)
 {
   return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+@gpu vec3 cross(vec3 a, vec3 b)
+{
+  return vec3(a.y * b.z - a.z * b.y,
+              a.z * b.x - a.x * b.z,
+              a.x * b.y - a.y * b.x);
+}
+
+@gpu float norm3(vec3 x)
+{
+  return sqrt(dot3(x, x));
+}
+
+@gpu vec3 normalize3(vec3 x)
+{
+  return x * (1.0 / norm3(x));
+}
+
 // functions to build transformation matrices
 
-@gpu mat4x4 scale_x(float scale)
+@gpu mat4x4 identity()
 {
-  return mat4x4(vec4(scale, 0., 0., 0.),
+  return mat4x4(vec4(1., 0., 0., 0.),
                 vec4(0., 1., 0., 0.),
                 vec4(0., 0., 1., 0.),
                 vec4(0., 0., 0., 1.));
+}
+
+@gpu mat4x4 scale_x(float scale)
+{
+  mat4x4 ret = identity();
+  ret.x.x = scale;
+  return ret;
 }
 
 @gpu mat4x4 scale_y(float scale)
 {
-  return mat4x4(vec4(1., 0., 0., 0.),
-                vec4(0., scale, 0., 0.),
-                vec4(0., 0., 1., 0.),
-                vec4(0., 0., 0., 1.));
+  mat4x4 ret = identity();
+  ret.y.y = scale;
+  return ret;
 }
 
 @gpu mat4x4 scale_z(float scale)
 {
-  return mat4x4(vec4(1., 0., 0., 0.),
-                vec4(0., 1., 0., 0.),
-                vec4(0., 0., scale, 0.),
-                vec4(0., 0., 0., 1.));
+  mat4x4 ret = identity();
+  ret.z.z = scale;
+  return ret;
+}
+
+@gpu mat4x4 rotate_x(float theta)
+{
+  mat4x4 ret = identity();
+
+  ret.z.z = ret.y.y = cos(theta);
+  ret.y.z = sin(theta);
+  ret.z.y = -ret.y.z;
+  return ret;
+}
+
+@gpu mat4x4 rotate_y(float theta)
+{
+  mat4x4 ret = identity();
+
+  ret.x.x = ret.z.z = cos(theta);
+  ret.z.x = sin(theta);
+  ret.x.z = -ret.z.x;
+  return ret;
+}
+
+@gpu mat4x4 rotate_z(float theta)
+{
+  mat4x4 ret = identity();
+
+  ret.x.x = ret.y.y = cos(theta);
+  ret.x.y = sin(theta);
+  ret.y.x = -ret.x.y;
+  return ret;
+}
+
+@gpu mat4x4 translate(vec3 offset)
+{
+  mat4x4 ret = identity();
+  ret.x.x = offset.x;
+  ret.x.y = offset.y;
+  ret.x.z = offset.z;
+  return ret;
+}
+
+mat4x4 perspective(float fovy, float aspect,
+                   float near, float far)
+{
+  float top   = tan(deg_to_rad(fovy) / 2.) * near;
+  float right = top * aspect;
+
+  mat4x4 ret = identity();
+  ret.x.x =  near / right;
+  ret.y.y = near / top;
+  ret.z.z = -(far + near) / (far - near);
+  ret.w.z = -2.0 * far * near / (far - near);
+  ret.z.w = -1.0;
+  return ret;
+}
+
+mat4x4 look_at(vec3 eye, vec3 at, vec3 up)
+{
+  vec3 n = normalize3(eye - at);
+  vec3 u = normalize3(cross(up, n));
+  vec3 v = normalize3(cross(n, u));
+  return mat4x4(vec4(u.x, v.x, n.x, 0.0),
+                vec4(u.y, v.y, n.y, 0.0),
+                vec4(u.z, v.z, n.z, 0.0),
+                vec4(0.0, 0.0, 0.0, 1.0)) * translate(-eye);
 }
 
