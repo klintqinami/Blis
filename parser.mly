@@ -10,7 +10,7 @@ open Ast
 %token LBRACKET RBRACKET 
 %token COMMA
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT INC DEC
-%token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR
+%token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR MOD
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
 %token VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
@@ -34,7 +34,7 @@ open Ast
 %left EQ NEQ
 %left LT GT LEQ GEQ
 %left PLUS MINUS
-%left TIMES DIVIDE
+%left TIMES DIVIDE MOD
 %right NOT NEG PREINC PREDEC
 %left DOT LPAREN LBRACKET POSTDEC POSTINC INC DEC
 
@@ -175,6 +175,7 @@ expr:
   | expr MINUS  expr { Binop($1, Sub,   $3) }
   | expr TIMES  expr { Binop($1, Mult,  $3) }
   | expr DIVIDE expr { Binop($1, Div,   $3) }
+  | expr MOD expr { Binop($1, Mod,   $3) }
   | expr EQ     expr { Binop($1, Equal, $3) }
   | expr NEQ    expr { Binop($1, Neq,   $3) }
   | expr LT     expr { Binop($1, Less,  $3) }

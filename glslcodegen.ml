@@ -247,6 +247,7 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
               SA.IAdd | SA.FAdd -> ordinary_binop "+"
             | SA.ISub | SA.FSub -> ordinary_binop "-"
             | SA.IMult | SA.FMult | SA.Splat -> ordinary_binop "*"
+            | SA.IMod -> "%"
             | SA.IDiv | SA.FDiv -> ordinary_binop "/"
             | SA.IEqual | SA.FEqual | SA.BEqual | SA.U8Equal -> ordinary_binop "=="
             | SA.INeq | SA.FNeq | SA.BNeq | SA.U8Neq -> ordinary_binop "!="

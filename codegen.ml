@@ -577,6 +577,7 @@ let translate ((structs, pipelines, globals, functions) as program) =
 	    SA.IAdd     -> per_component_builder L.build_add
 	  | SA.ISub     -> per_component_builder L.build_sub
 	  | SA.IMult    -> per_component_builder L.build_mul
+          | SA.IMod     -> per_component_builder L.build_srem
           | SA.IDiv     -> per_component_builder L.build_sdiv
 	  | SA.IEqual   -> L.build_icmp L.Icmp.Eq
 	  | SA.INeq     -> L.build_icmp L.Icmp.Ne
