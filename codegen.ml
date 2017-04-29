@@ -32,7 +32,7 @@ index_of' 0 l
 (* Why is this not a stdlib function? *)
 let rec range i j = if i >= j then [] else i :: (range (i+1) j) 
 
-let translate ((structs, pipelines, globals, functions) as program) =
+let translate ((structs, pipelines, globals, functions) as program : SA.sprogram) =
   let shaders = G.translate program in
 
   (* ignore GPU functions for the rest of the codegen *)
@@ -124,10 +124,21 @@ let translate ((structs, pipelines, globals, functions) as program) =
       (Array.of_list (List.map (fun m -> ltype_of_typ (fst m)) s.A.members)) false)
   structs;
 
+  let handle_const (_, detail) = match detail with
+	SA.SIntLit i -> L.const_int i32_t i
+      | SA.SFloatLit f -> L.const_float f32_t f
+      | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
+      | SA.SCharLit c -> L.const_int i8_t (Char.code c)
+      | SA.SStringLit s -> L.const_string context s
+      | _ -> raise (Failure "shouldn't get here")
+  in
+
   (* Declare each global variable; remember its value in a map *)
   let global_vars =
-    let global_var m (t, n) =
-      let init = L.undef (ltype_of_typ t)
+    let global_var m ((t, n), init) =
+      let init = match init with
+          Some e -> handle_const e
+        | None -> L.undef (ltype_of_typ t)
       in StringMap.add n (L.define_global n init the_module) m in
     List.fold_left global_var StringMap.empty globals in
 
@@ -402,11 +413,9 @@ let translate ((structs, pipelines, globals, functions) as program) =
 
     (* Construct code for an expression; return its value *)
     and expr builder sexpr = match snd sexpr with
-	SA.SIntLit i -> L.const_int i32_t i
-      | SA.SFloatLit f -> L.const_float f32_t f
-      | SA.SBoolLit b -> L.const_int i1_t (if b then 1 else 0)
-      | SA.SCharLit c -> L.const_int i8_t (Char.code c)
-      | SA.SStringLit s -> L.const_string context s
+	SA.SIntLit _ | SA.SFloatLit _ | SA.SBoolLit _
+      | SA.SCharLit _ | SA.SStringLit _ ->
+          handle_const sexpr
       | SA.SNoexpr -> izero
       | SA.SStructDeref((A.Pipeline(_), _) as e, "indices") ->
           let e' = expr builder e in

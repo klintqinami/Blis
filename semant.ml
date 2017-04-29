@@ -175,7 +175,10 @@ let check program =
 
   List.iter (check_type
     (fun s n -> s ^ " does not exist for global " ^ n)
-    (fun n -> "illegal void global " ^ n)) globals;
+    (fun n -> "illegal void global " ^ n)) (List.map fst globals);
+
+  report_duplicate (fun n -> "duplicate global " ^ n)
+    (List.map (fun ((_, n), _) -> n) globals);
 
   let env = {
     in_loop = false;
@@ -184,11 +187,35 @@ let check program =
     locals = [];
     names = StringSet.empty; } in
 
-  let env = List.fold_left (fun env (typ, name) ->
-      fst (add_symbol_table env name typ))
-    env globals in
-   
-  report_duplicate (fun n -> "duplicate global " ^ n) (List.map snd globals);
+  let check_const = function
+    (* TODO if we want to do more, we need to figure out how to pull out some of
+     * expr and re-use it here.
+     *)
+      IntLit(l) -> (Mat(Int, 1, 1), SIntLit(l))
+    | FloatLit(l) -> (Mat(Float, 1, 1), SFloatLit(l))
+    | BoolLit(l) -> (Mat(Bool, 1, 1), SBoolLit(l))
+    | CharLit(c) -> (Mat(Byte, 1, 1), SCharLit(c))
+    | StringLit(s) ->
+        (Array(Mat(Byte, 1, 1), Some (String.length s)), SStringLit(s))
+    | _ as e -> raise (Failure ("invalid expression " ^ string_of_expr e ^
+        " in global variable initializer"))
+  in
+
+  let check_initializer (typ, name) e =
+    let se = check_const e in
+    if fst se <> typ then
+      raise (Failure ("invalid type in initializer for " ^ name ^ ", expected " ^
+        string_of_typ typ ^ " but got " ^ string_of_typ (fst se)))
+    else
+      se
+  in
+
+  let env, globals = List.fold_left (fun (env, globals) ((typ, name), init) ->
+    let env, name = add_symbol_table env name typ in
+    env, ((typ, name), (match init with
+        None -> None
+      | Some e -> Some (check_initializer (typ, name) e))) :: globals)
+  (env, []) globals in
 
   (**** Checking Functions ****)
 

@@ -80,7 +80,7 @@ type pipeline_decl = {
 type program = {
   struct_decls : struct_decl list;
   pipeline_decls : pipeline_decl list;
-  var_decls : bind list;
+  var_decls : (bind * expr option) list;
   func_decls : func_decl list;
 }
 
@@ -155,14 +155,19 @@ let rec string_of_expr expr =
       fname ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Noexpr -> "")
 
-let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
+let string_of_bind (t, id) =
+  string_of_typ t ^ " " ^ id
+
+let string_of_vdecl (bind, init) = match init with
+    None -> string_of_bind bind ^ ";\n"
+  | Some e -> string_of_bind bind ^ " = " ^ string_of_expr e ^ ";\n"
+
+let string_of_simple_vdecl bind = string_of_bind bind ^ ";\n"
 
 let rec string_of_stmt = function
     Block(stmts) ->
       "{\n" ^ String.concat "" (List.map string_of_stmt stmts) ^ "}\n"
-  | Local(decl, None) -> string_of_vdecl decl
-  | Local((t, id), Some e) -> string_of_typ t ^ " " ^ id ^ " = " ^
-      string_of_expr e ^ ";\n"
+  | Local(decl, e) -> string_of_vdecl (decl, e)
   | Expr(expr) -> string_of_expr expr ^ ";\n";
   | Return(expr) -> "return " ^ string_of_expr expr ^ ";\n";
   | If(e, s, Block([])) -> "if (" ^ string_of_expr e ^ ")\n" ^ string_of_stmt s
@@ -198,7 +203,7 @@ let string_of_fdecl fdecl =
 
 let string_of_sdecl sdecl =
   "struct " ^ sdecl.sname ^ " {\n" ^
-  String.concat "" (List.map string_of_vdecl sdecl.members) ^ "};\n"
+  String.concat "" (List.map string_of_simple_vdecl sdecl.members) ^ "};\n"
 
 let string_of_pdecl pdecl =
   "pipeline " ^ pdecl.pname ^ " {\n" ^

@@ -76,14 +76,18 @@ func_qualifier:
   | GPU                 { Both }
 
 vdecl:
+    bind SEMI { ($1, None) }
+  | bind ASSIGN expr SEMI { ($1, Some $3) }
+
+simple_vdecl:
     bind SEMI { $1 }
 
-vdecl_list:
+simple_vdecl_list:
     /* nothing */ { [] }
-  | vdecl_list vdecl { $2 :: $1 }
+  | simple_vdecl_list simple_vdecl { $2 :: $1 }
 
 sdecl:
-    STRUCT ID LBRACE vdecl_list RBRACE SEMI { {
+    STRUCT ID LBRACE simple_vdecl_list RBRACE SEMI { {
       sname = $2;
       members = List.rev $4;
     } }

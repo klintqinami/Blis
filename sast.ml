@@ -55,7 +55,9 @@ type spipeline_decl = {
   smembers : bind list;
 }
 
-type sprogram = struct_decl list * spipeline_decl list * bind list * sfunc_decl list
+type svdecl = bind * sexpr option
+
+type sprogram = struct_decl list * spipeline_decl list * svdecl list * sfunc_decl list
 
 
 (* do a pre-order traversal of all statements, calling 'f' and
@@ -149,7 +151,7 @@ let string_of_sfdecl fdecl =
   fdecl.sfname ^ "(" ^ String.concat ", " (List.map (fun (q, (t, n)) ->
   string_of_formal_qual q ^ " " ^ string_of_typ t ^ " " ^ n) fdecl.sformals) ^
   ")\n{\n" ^
-  String.concat "" (List.map string_of_vdecl fdecl.slocals) ^
+  String.concat "" (List.map string_of_simple_vdecl fdecl.slocals) ^
   String.concat "" (List.map string_of_sstmt fdecl.sbody) ^
   "}\n"
 
@@ -162,8 +164,12 @@ let string_of_spdecl pdecl =
     pdecl.sinputs) ^
   "};\n"
 
+let string_of_svdecl (bind, init) = match init with
+    None -> string_of_bind bind ^ ";\n"
+  | Some e -> string_of_bind bind ^ " = " ^ string_of_sexpr e ^ ";\n"
+
 let string_of_sprogram (structs, pipelines, vars, funcs) =
   String.concat "" (List.map string_of_sdecl structs) ^ "\n" ^
   String.concat "" (List.map string_of_spdecl pipelines) ^ "\n" ^
-  String.concat "" (List.map string_of_vdecl vars) ^ "\n" ^
+  String.concat "" (List.map string_of_svdecl vars) ^ "\n" ^
   String.concat "\n" (List.map string_of_sfdecl funcs)

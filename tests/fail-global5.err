@@ -1,0 +1,1 @@
+Fatal error: exception Failure("invalid type in initializer for foo, expected int but got float")
