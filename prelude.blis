@@ -258,12 +258,16 @@ bool read_obj(u8[] fpath, out vec3[] verts, out int[] tris)
     } else if (lines[i][0] == 'f') {
       if (length(tokens) != 4)
         return false;
-      if (!string_to_integer(tokens[1], tris[3*fcount + 0]))
+      int tmp;
+      if (!string_to_integer(tokens[1], tmp))
         return false;
-      if (!string_to_integer(tokens[2], tris[3*fcount + 1]))
+      tris[3*fcount + 0] = tmp - 1;
+      if (!string_to_integer(tokens[2], tmp))
         return false;
-      if (!string_to_integer(tokens[3], tris[3*fcount + 2]))
+      tris[3*fcount + 1] = tmp - 1;
+      if (!string_to_integer(tokens[3], tmp))
         return false;
+      tris[3*fcount + 2] = tmp - 1;
       fcount = fcount + 1;
     }
   }
@@ -367,9 +371,9 @@ bool read_obj(u8[] fpath, out vec3[] verts, out int[] tris)
 @gpu mat4x4 translate(vec3 offset)
 {
   mat4x4 ret = identity();
-  ret.x.x = offset.x;
-  ret.x.y = offset.y;
-  ret.x.z = offset.z;
+  ret.w.x = offset.x;
+  ret.w.y = offset.y;
+  ret.w.z = offset.z;
   return ret;
 }
 
