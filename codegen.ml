@@ -135,7 +135,7 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
 
   (* Declare each global variable; remember its value in a map *)
   let global_vars =
-    let global_var m ((t, n), init) =
+    let global_var m (_, (t, n), init) =
       let init = match init with
           Some e -> handle_const e
         | None -> L.undef (ltype_of_typ t)

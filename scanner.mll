@@ -84,6 +84,7 @@ rule token = parse
 | "pipeline" { PIPELINE }
 | "void"   { VOID }
 | "struct" { STRUCT }
+| "const"  { CONST }
 | "true"   { TRUE }
 | "false"  { FALSE }
 | "in"  { IN }

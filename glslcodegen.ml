@@ -152,12 +152,19 @@ let add_variable_name env name =
   let table', new_name = add_symbol_table env.table name in
   ({ env with table = table' }, new_name)
 
-let translate ((structs, _, _, functions) : SA.sprogram) =
+let translate ((structs, _, globals, functions) : SA.sprogram) =
   let env = {
     table = empty_table;
     cur_qualifier = A.Both;
     forloop_update_statement = "";
   }
+  in
+
+  (* create mapping from const global to initializer *)
+  let global_map = List.fold_left (fun map (_, (_, n), e) ->
+    match e with
+        Some e -> StringMap.add n e map
+      | None -> map) StringMap.empty globals
   in
 
   (* structs and functions share a namespace in GLSL, so use the same table to
@@ -255,7 +262,11 @@ let translate ((structs, _, _, functions) : SA.sprogram) =
             String.concat ", "
               (List.map (fun c -> string_of_int (Char.code c)) (explode s)) ^
             ")"
-      | SA.SId(n) -> StringMap.find n env.table.scope
+      | SA.SId(n) ->
+          (try StringMap.find n env.table.scope 
+          with Not_found ->
+            let e = StringMap.find n global_map in
+            expr env e)
       | SA.SStructDeref(e, mem) -> let e' = expr env e in
           (match fst e with
               A.Mat(_, 1, _) -> "(" ^ e' ^ ")." ^ mem

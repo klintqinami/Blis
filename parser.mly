@@ -12,6 +12,7 @@ open Ast
 %token PLUS MINUS TIMES DIVIDE ASSIGN NOT DOT INC DEC
 %token EQ NEQ LT LEQ GT GEQ TRUE FALSE AND OR MOD
 %token RETURN BREAK CONTINUE IF ELSE FOR WHILE
+%token CONST
 %token VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
 %token IN OUT INOUT UNIFORM
@@ -76,8 +77,9 @@ func_qualifier:
   | GPU                 { Both }
 
 vdecl:
-    bind SEMI { ($1, None) }
-  | bind ASSIGN expr SEMI { ($1, Some $3) }
+    bind SEMI { (GVNone, $1, None) }
+  | bind ASSIGN expr SEMI { (GVNone, $1, Some $3) }
+  | CONST bind ASSIGN expr SEMI { (GVConst, $2, Some $4) }
 
 simple_vdecl:
     bind SEMI { $1 }

@@ -7,7 +7,12 @@ open Utils
 module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
 
-type symbol = Ast.typ * string
+type symbol_kind =
+    KindLocal
+  | KindGlobal
+  | KindConstGlobal
+
+type symbol = symbol_kind * Ast.typ * string
 
 type translation_environment = {
   scope : symbol StringMap.t;
@@ -68,9 +73,9 @@ let check program =
   (* Adds/replaces symbol on the symbol table, returns the new unique name for
    * the symbol 
    *)
-  let add_symbol_table env name typ =
+  let add_symbol_table env name kind typ =
     let unique_name = find_unique_name env name in
-    ({ env with scope = StringMap.add name (typ, unique_name) env.scope;
+    ({ env with scope = StringMap.add name (kind, typ, unique_name) env.scope;
        names = StringSet.add unique_name env.names; }, unique_name)
   in
 
@@ -175,10 +180,11 @@ let check program =
 
   List.iter (check_type
     (fun s n -> s ^ " does not exist for global " ^ n)
-    (fun n -> "illegal void global " ^ n)) (List.map fst globals);
+    (fun n -> "illegal void global " ^ n))
+  (List.map (fun (_, b, _) -> b) globals);
 
   report_duplicate (fun n -> "duplicate global " ^ n)
-    (List.map (fun ((_, n), _) -> n) globals);
+    (List.map (fun (_, (_, n), _) -> n) globals);
 
   let env = {
     in_loop = false;
@@ -210,9 +216,11 @@ let check program =
       se
   in
 
-  let env, globals = List.fold_left (fun (env, globals) ((typ, name), init) ->
-    let env, name = add_symbol_table env name typ in
-    env, ((typ, name), (match init with
+  let env, globals = List.fold_left (fun (env, globals) (qual, (typ, name), init) ->
+    let env, name = add_symbol_table env name
+      (if qual = GVConst then KindConstGlobal else KindGlobal)
+    typ in
+    env, (qual, (typ, name), (match init with
         None -> None
       | Some e -> Some (check_initializer (typ, name) e))) :: globals)
   (env, []) globals in
@@ -455,7 +463,14 @@ let check program =
 
 
     let rec lvalue need_lvalue env stmts = function
-        Id s -> let t, s' = find_symbol_table env.scope s in env, stmts, (t, SId(s'))
+        Id s -> let k, t, s' = find_symbol_table env.scope s in
+          if k = KindGlobal && env.cur_qualifier <> CpuOnly then
+            raise (Failure ("access to global variable " ^
+              s ^ " not allowed in non-CPU-only function"))
+          else if k = KindConstGlobal && need_lvalue then
+            raise (Failure ("const global " ^ s ^ " is not an lvalue"))
+          else
+            env, stmts, (t, SId(s'))
       | StructDeref(e, m) as d ->
           let env, stmts, e' = lvalue need_lvalue env stmts e in
           let typ = fst e' in
@@ -851,7 +866,7 @@ let check program =
                       Some e -> let env, sstmts, e' = expr env sstmts e in
                         env, sstmts, Some (e', e)
                     | None -> env, sstmts, None in
-                let env, name = add_symbol_table env s t in
+                let env, name = add_symbol_table env s KindLocal t in
                 let env = { env with locals = (t, name) :: env.locals } in
                 match e' with
                     Some (e', e) ->
@@ -883,7 +898,7 @@ let check program =
     let env = { env with cur_qualifier = func.fqual } in
 
     let env, formals = List.fold_left (fun (env, formals) (q, (t, s)) ->
-      let env, name = add_symbol_table env s t in
+      let env, name = add_symbol_table env s KindLocal t in
       env, (q, (t, name)) :: formals) (env, []) func.formals
     in
 

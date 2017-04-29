@@ -55,7 +55,7 @@ type spipeline_decl = {
   smembers : bind list;
 }
 
-type svdecl = bind * sexpr option
+type svdecl = global_qualifier * bind * sexpr option
 
 type sprogram = struct_decl list * spipeline_decl list * svdecl list * sfunc_decl list
 
@@ -164,9 +164,10 @@ let string_of_spdecl pdecl =
     pdecl.sinputs) ^
   "};\n"
 
-let string_of_svdecl (bind, init) = match init with
-    None -> string_of_bind bind ^ ";\n"
-  | Some e -> string_of_bind bind ^ " = " ^ string_of_sexpr e ^ ";\n"
+let string_of_svdecl (qual, bind, init) = match init with
+    None -> string_of_global_qual qual ^ string_of_bind bind ^ ";\n"
+  | Some e -> string_of_global_qual qual ^ string_of_bind bind ^
+      " = " ^ string_of_sexpr e ^ ";\n"
 
 let string_of_sprogram (structs, pipelines, vars, funcs) =
   String.concat "" (List.map string_of_sdecl structs) ^ "\n" ^

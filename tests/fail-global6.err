@@ -1,0 +1,1 @@
+Fatal error: exception Failure("access to global variable foo not allowed in non-CPU-only function")
