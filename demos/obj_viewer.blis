@@ -75,9 +75,9 @@ pipeline my_pipeline {
   @fragment fshader;
 };
 
-void set_camera_pos(pipeline my_pipeline p, float theta, float phi, float distance)
+void set_transform(pipeline my_pipeline p, float theta, float phi, float distance)
 {
-  mat4x4 ctm = rotate_y(theta) * rotate_z(phi);
+  mat4x4 ctm = rotate_y(deg_to_rad(theta)) * rotate_z(deg_to_rad(phi));
   vec4 eye_point = ctm * vec4(distance, 0., 0., 1.);
   vec3 eye_point = vec3(eye_point.x, eye_point.y, eye_point.z);
   mat4x4 camera = look_at(eye_point, vec3(0., 0., 0.) /* at */,
@@ -86,6 +86,68 @@ void set_camera_pos(pipeline my_pipeline p, float theta, float phi, float distan
   p.eye_pos = eye_point;
   p.world_xform = identity();
   p.xform = proj * camera;
+}
+
+bool mouse_down = false;
+bool x_pressed = false;
+bool z_pressed = false;
+float lastx;
+float lasty;
+const float MOUSE_SPEED = 1.; // degrees per pixel
+
+void update_camera_pos(window w, inout float theta, inout float phi,
+                       inout float distance)
+{
+  if (get_mouse_button(w, MOUSE_BUTTON_LEFT)) {
+    float x;
+    float y;
+    get_mouse_pos(w, x, y);
+    if (mouse_down) {
+      float diffx = x - lastx;
+      float diffy = y - lasty;
+      if (diffx != 0.) {
+        theta = theta + MOUSE_SPEED * diffx;
+        if (theta > 360.)
+          theta = theta - 360.;
+        if (theta < 0.)
+          theta = theta + 360.;
+      }
+      if (diffy != 0.) {
+        phi = phi + MOUSE_SPEED * diffy;
+        if (phi > 85.)
+          phi = 85.;
+        if (phi < -85.)
+          phi = -85.;
+      }
+    }
+    lastx = x;
+    lasty = y;
+    mouse_down = true;
+  } else {
+    mouse_down = false;
+  }
+
+  if (get_key(w, KEY_X)) {
+    if (!x_pressed) {
+      distance = distance + 1.;
+      if (distance > 50.)
+        distance = 50.;
+    }
+    x_pressed = true;
+  } else {
+    x_pressed = false;
+  }
+
+  if (get_key(w, KEY_Z)) {
+    if (!z_pressed) {
+      distance = distance - 1.;
+      if (distance < 1.)
+        distance = 1.;
+    }
+    z_pressed = true;
+  } else {
+    z_pressed = false;
+  }
 }
 
 int main()
@@ -125,8 +187,13 @@ int main()
   p.mat_specular = p.mat_diffuse;
   p.mat_shininess = 100.;
 
+  float distance = 2.;
+  float theta = 0.;
+  float phi = 0.;
+
   while (true) {
-    set_camera_pos(p, 0., 0., 1.);
+    update_camera_pos(win, theta, phi, distance);
+    set_transform(p, theta, phi, distance);
     clear(vec4(1., 1., 1., 1.));
     draw(p, length(tris));
     swap_buffers(win);

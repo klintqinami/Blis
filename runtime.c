@@ -193,7 +193,7 @@ void pipeline_set_uniform_float(struct pipeline *p, int location,
       }
       break;
     default:
-      assert(!"unreachable");
+     assert(!"unreachable");
   }
 }
 
@@ -260,8 +260,7 @@ void init(void)
 }
 
 /* TODO: when we get string support, add a string for the name */
-GLFWwindow *create_window(int width, int height, int offscreen)
-{
+GLFWwindow *create_window(int width, int height, int offscreen) {
   if (offscreen)
     glfwWindowHint(GLFW_VISIBLE, false);
   else
@@ -272,6 +271,9 @@ GLFWwindow *create_window(int width, int height, int offscreen)
     fprintf(stderr, "failed to create window\n");
     exit(1);
   }
+
+  glfwSetInputMode(window, GLFW_STICKY_KEYS, true);
+  glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, true);
 
   return window;
 }

@@ -264,6 +264,15 @@ let check program =
        fqual = CpuOnly; body = [] };
      { typ = bool1; fname = "window_should_close";
        formals = [In, (Window, "w")]; fqual = CpuOnly; body = [] };
+     { typ = bool1; fname = "get_key";
+       formals = [In, (Window, "w"); In, (int1, "key")]; fqual = CpuOnly;
+       body = []; };
+     { typ = bool1; fname = "get_mouse_button";
+       formals = [In, (Window, "w"); In, (int1, "button")]; fqual = CpuOnly;
+       body = []; };
+     { typ = Void; fname = "get_mouse_pos";
+       formals = [In, (Window, "w"); Out, (float1, "x"); Out, (float1, "y")];
+       fqual = CpuOnly; body = []; };
      { typ = Mat(Float, 1, 4); fname = "read_pixel";
        formals = [In, (int1, "x"); In, (int1, "y")];
        fqual = CpuOnly; body = [] };

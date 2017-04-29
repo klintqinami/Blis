@@ -228,6 +228,17 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
   let poll_events_t = L.function_type void_t [| |] in
   let poll_events_func =
     L.declare_function "glfwPollEvents" poll_events_t the_module in
+  let get_key_t = L.function_type i32_t [| voidp_t; i32_t |] in
+  let get_key_func =
+    L.declare_function "glfwGetKey" get_key_t the_module in
+  let get_mouse_t = L.function_type i32_t [| voidp_t; i32_t |] in
+  let get_mouse_func =
+    L.declare_function "glfwGetMouseButton" get_mouse_t the_module in
+  let get_mouse_pos_t =
+    L.function_type void_t
+      [| voidp_t; L.pointer_type f64_t; L.pointer_type f64_t; |] in
+  let get_mouse_pos_func =
+    L.declare_function "glfwGetCursorPos" get_mouse_pos_t the_module in
   let should_close_t = L.function_type i32_t [| voidp_t |] in
   let should_close_func =
     L.declare_function "glfwWindowShouldClose" should_close_t the_module in
@@ -828,6 +839,37 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
       | SA.SCall (_, "swap_buffers", [w]) ->
           let w' = expr builder w in
           ignore (L.build_call swap_buffers_func [| w' |] "" builder);
+          builder
+      | SA.SCall (ret, "get_key", [w; key]) ->
+          let w' = expr builder w in
+          let key' = expr builder key in
+          let status = L.build_call get_key_func [| w'; key' |] "" builder in
+          let ret' = lvalue builder ret in
+          let status = L.build_icmp L.Icmp.Ne izero status "" builder in
+          ignore (L.build_store status ret' builder); builder
+      | SA.SCall (ret, "get_mouse_button", [w; button]) ->
+          let w' = expr builder w in
+          let button' = expr builder button in
+          let status = L.build_call get_mouse_func [| w'; button' |] "" builder in
+          let ret' = lvalue builder ret in
+          let status = L.build_icmp L.Icmp.Ne izero status "" builder in
+          ignore (L.build_store status ret' builder); builder
+      | SA.SCall (_, "get_mouse_pos", [w; x; y]) ->
+          (* The GLFW function expects a pointer to a double for x and y, so we
+           * have to convert double -> float ourselves after calling it.
+           *)
+          let w' = expr builder w in
+          let x' = lvalue builder x in
+          let y' = lvalue builder y in
+          let tmp_x = L.build_alloca f64_t "" builder in
+          let tmp_y = L.build_alloca f64_t "" builder in
+          ignore (L.build_call get_mouse_pos_func [| w'; tmp_x; tmp_y |] "" builder);
+          let out_x = L.build_fptrunc
+            (L.build_load tmp_x "" builder) f32_t "" builder in
+          let out_y = L.build_fptrunc
+            (L.build_load tmp_y "" builder) f32_t "" builder in
+          ignore (L.build_store out_x x' builder);
+          ignore (L.build_store out_y y' builder);
           builder
       | SA.SCall (_, "poll_events", []) ->
           ignore (L.build_call poll_events_func [| |] "" builder);
