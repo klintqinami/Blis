@@ -681,10 +681,15 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
 	    SA.INeg       -> per_component_builder L.build_neg e'
 	  | SA.FNeg       -> per_component_builder L.build_fneg e'
           | SA.BNot       -> per_component_builder L.build_not e'
-          | SA.Int2Float  -> L.build_sitofp e' f32_t
-          | SA.Float2Int  -> L.build_fptosi e' i32_t
-          | SA.Bool2Int   -> L.build_zext e' i32_t
-          | SA.Bool2Float -> L.build_uitofp e' f32_t) "tmp" builder
+          | SA.Int2Float  -> 
+              per_component_builder (fun e -> L.build_sitofp e f32_t) e'
+          | SA.Float2Int  ->
+              per_component_builder (fun e -> L.build_fptosi e i32_t) e'
+          | SA.Bool2Int   ->
+              per_component_builder (fun e -> L.build_zext e i32_t) e'
+          | SA.Bool2Float ->
+              per_component_builder (fun e -> L.build_uitofp e f32_t) e')
+          "tmp" builder
       | SA.STypeCons act ->
           match fst sexpr with
               A.Mat(_, _, _) | A.Array(_, Some _) ->

@@ -4,7 +4,7 @@ struct foo {
 };
 
 int main() {
-    struct foo temp = foo(42, 1337.0);
+    struct foo temp = struct foo(42, 1337.0);
     printi(temp.a);
     printf(temp.b);
 

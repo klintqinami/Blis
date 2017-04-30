@@ -160,22 +160,6 @@ let check program =
         String.concat " -> " (List.map (fun s -> s.sname) cycle))))
   in
    
-  (* Add struct constructors to function declarations *)
-  let functions = List.fold_left (fun functions s -> 
-    { typ = Struct(s.sname); 
-      fname = s.sname; 
-      fqual = Both;
-      formals = List.map (fun b -> (In, b)) s.members; 
-      body = Local((Struct(s.sname), "tmp"), None) ::
-        (List.map (fun m -> 
-          Expr(Assign(StructDeref(Id("tmp"), snd m), Id(snd m)))) s.members) 
-        @ [Return(Id("tmp"))];
-    } :: functions      
-    )
-    functions structs
-  in
-  
-
   (**** Checking Global Variables ****)
 
   List.iter (check_type
@@ -739,67 +723,105 @@ let check program =
             (* return the temporary we made for the call *)
             env, stmts, ret_tmp
       | TypeCons(typ, actuals) as cons ->
-          let check_cons formals =
-            if List.length actuals != List.length formals then
-              raise (Failure ("expecting " ^ string_of_int (List.length formals) ^
-               " arguments in constructor for " ^ string_of_typ typ))
-            else 
-              let env, stmts, actuals = List.fold_left
-                (* translate/evaluate function arguments *)
-                (fun (env, stmts, actuals) e ->
-                  let env, stmts, se = expr env stmts e in
-                  env, stmts, se :: actuals) (env, stmts, []) actuals in
-              let actuals = List.rev actuals in
-              (* make a temporary for each formal parameter *)
-              let env, params = List.fold_left (fun (env, temps) ft ->
-                let env, temp = add_tmp env ft in
-                (env, temp :: temps)) (env, []) formals in
-              let params = List.rev params in
-              (* copy in-parameters to temporaries *)
-              let env, stmts = List.fold_left2 (fun (env, stmts) temp actual ->
-                let et = fst actual in
-                let ft = fst temp in
-                check_assign env temp actual stmts
-                  (Failure ("illegal actual argument found " ^ string_of_typ et ^
-                  " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr cons)))
-              (env, stmts) params actuals in
-              env, stmts, (typ, STypeCons(params))
+
+          (* Take a list of pairs, with the formal arguments and the
+           * corresponding *action* to be taken, which can insert statements,
+           * modify the environment, and return a value. Try each possible
+           * formal arguments, swallowing any errors and rolling back changes to
+           * the environment, and only throw an error if all the possibilities
+           * returned an error. This is similar to pattern-matching against
+           * possible inputs, except the patterns to match against can be
+           * generated at run-time for things like struct constructors and
+           * user-defined functions. We can also more easily handle implicit
+           * conversions, since we can just try to do the conversion and move to
+           * the next pattern if it fails (thanks to the 100% purely functional
+           * translation environment).
+           *)
+          let check_cons action_list =
+            let rec check_cons' = function
+                (formals, builder) :: rest ->
+                  if List.length actuals != List.length formals then
+                    check_cons' rest
+                  else (try
+                    let env, stmts, actuals = List.fold_left
+                      (* translate/evaluate function arguments *)
+                      (fun (env, stmts, actuals) e ->
+                        let env, stmts, se = expr env stmts e in
+                        env, stmts, se :: actuals) (env, stmts, []) actuals in
+                    let actuals = List.rev actuals in
+                    (* make a temporary for each formal parameter *)
+                    let env, params = List.fold_left (fun (env, temps) ft ->
+                      let env, temp = add_tmp env ft in
+                      (env, temp :: temps)) (env, []) formals in
+                    let params = List.rev params in
+                    (* copy in-parameters to temporaries *)
+                    let env, stmts = List.fold_left2 (fun (env, stmts) temp actual ->
+                      check_assign env temp actual stmts
+                        (Failure "dummy"))
+                    (env, stmts) params actuals in
+                    builder env stmts params
+                  with Failure(_) -> check_cons' rest)
+                | [] ->
+                    raise (Failure ("couldn't find matching formal arguments" ^
+                      " in " ^ string_of_expr cons ^
+                      ", possible arguments are: \n" ^
+                      String.concat "\n" (List.map (fun (formals, _) ->
+                        String.concat ", " (List.map (fun formal ->
+                          string_of_typ formal)
+                        formals))
+                      action_list)))
+            in
+            check_cons' action_list
           in
-          let handle_array_vec base_type size =
+
+          (* action that simply returns a STypeCons with the parameters *)
+          let action_cons env stmts params =
+            env, stmts, (typ, STypeCons(params))
+          in
+          (* return a formal list that's "size" copies of "base_type".
+           *)
+          let array_vec_formals base_type size =
             let rec copies n =
               if n = 0 then [] else base_type :: copies (n-1) in
-            check_cons (copies size)
+            (copies size)
           in
-          match typ with
-              (* struct constructors and functions are in the same namespace,
-               * and we'll handle struct constructors as regular functions
-               * anyways.
-               *)
-            | Struct s -> expr env stmts (Call(s, actuals))
-            | Mat(b, 1, 1) ->
-                (match actuals with
-                    [e] ->
-                      let env, stmts, e' = expr env stmts e in
-                      env, stmts, (typ, SUnop((match b, fst e' with
-                          Int, Mat(Float, 1, 1) -> Float2Int
-                        | Int, Mat(Bool, 1, 1) -> Bool2Int
-                        | Float, Mat(Int, 1, 1) -> Int2Float
-                        | Float, Mat(Bool, 1, 1) -> Bool2Float
-                        | _ -> raise (Failure ("cannot convert " ^
-                          string_of_typ (fst e') ^ " to " ^
-                          string_of_typ typ ^ " in " ^
-                          string_of_expr cons))), e'))
-                  | _ -> raise (Failure ("expected only one argument in " ^ 
-                    string_of_expr cons)))
-            | Mat(b, 1, w) -> handle_array_vec (Mat(b, 1, 1)) w
-            | Mat(b, w, l) -> handle_array_vec (Mat(b, 1, l)) w
-            | Array(t, Some s) -> handle_array_vec t s
-            | Array(_, None) -> check_cons [Mat(Int, 1, 1)]
-            | Buffer(t) -> check_buffer_type t; check_cons []
-            | Pipeline(_) -> check_cons [Mat(Bool, 1, 1)]
-            | Window -> check_cons [Mat(Int, 1, 1); Mat(Int, 1, 1); Mat(Bool, 1, 1)]
-            | _ -> raise (Failure ("unhandled type constructor for " ^
-                      string_of_typ typ));
+
+          (* action that creates a SUnop with the given op *)
+          let action_unop op = (fun env stmts params ->
+            env, stmts, (typ, SUnop(op, List.hd params)))
+          in
+
+          check_cons (match typ with
+            | Struct s ->
+                let sdecl = try StringMap.find s struct_decls
+                with Not_found ->
+                  raise (Failure ("struct " ^ s ^ " does not exist in " ^
+                    string_of_expr cons))
+                in
+                let formals = List.map fst sdecl.members in
+                [formals, (fun env stmts params ->
+                  let env, tmp = add_tmp env typ in
+                  let stmts = List.fold_left2
+                    (fun stmts (typ, name) actual ->
+                      SAssign((typ, SStructDeref(tmp, name)), actual) :: stmts)
+                  stmts sdecl.members params in
+                  env, stmts, tmp)]
+            | Mat(Float, 1, 1) ->
+              [[Mat(Int, 1, 1)], action_unop Int2Float;
+               [Mat(Bool, 1, 1)], action_unop Bool2Float]
+            | Mat(Int, 1, 1) ->
+              [[Mat(Float, 1, 1)], action_unop Float2Int;
+               [Mat(Bool, 1, 1)], action_unop Bool2Int]
+            | Mat(b, 1, w) -> [array_vec_formals (Mat(b, 1, 1)) w, action_cons]
+            | Mat(b, w, l) -> [array_vec_formals (Mat(b, 1, l)) w, action_cons]
+            | Array(t, Some s) -> [array_vec_formals t s, action_cons]
+            | Array(_, None) -> [[Mat(Int, 1, 1)], action_cons]
+            | Buffer(t) -> check_buffer_type t; [[], action_cons]
+            | Pipeline(_) -> [[Mat(Bool, 1, 1)], action_cons]
+            | Window ->
+                [[Mat(Int, 1, 1); Mat(Int, 1, 1); Mat(Bool, 1, 1)], action_cons]
+            | _ -> raise (Failure ("bad type constructor " ^
+                      string_of_expr cons)))
                   
     in
 
