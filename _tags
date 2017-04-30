@@ -1,2 +1,3 @@
-"runtime.o":       not_hygienic
-"kitten.obj":      not_hygienic
+"runtime.o":         not_hygienic
+"kitten.obj":        not_hygienic
+"bunny_regular.obj": not_hygienic
