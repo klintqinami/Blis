@@ -10,7 +10,8 @@ type sop = IAdd | ISub | IMult | IDiv | IMod
          | BAnd | BOr | BEqual | BNeq
 
 type suop = INeg | FNeg | BNot |
-            Int2Float | Float2Int | Bool2Int | Bool2Float
+            Int2Float | Float2Int | Bool2Int | Int2Bool | Bool2Float |
+            Float2Bool
 
 type sexpr_detail =
     SIntLit of int

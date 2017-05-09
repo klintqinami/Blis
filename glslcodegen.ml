@@ -325,7 +325,8 @@ let translate ((structs, _, globals, functions) : SA.sprogram) =
             | SA.BNot, A.Mat(A.Bool, 1, 1) -> "!"
             | SA.BNot, A.Mat(A.Bool, 1, _) -> "not"
             | SA.Int2Float, _ | SA.Bool2Float, _
-            | SA.Float2Int, _ | SA.Bool2Int, _ -> string_of_typ typ
+            | SA.Float2Int, _ | SA.Bool2Int, _
+            | SA.Int2Bool, _ | SA.Float2Bool, _ -> string_of_typ typ
             | _, _ -> raise (Failure "shouldn't get here")) ^ "(" ^ expr env e ^ ")"
       | SA.STypeCons(elist) -> (match typ with
           A.Mat(_, _, _) | A.Array(_, _) ->

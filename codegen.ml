@@ -406,16 +406,19 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
               "" builder)
         | (A.Mat(b, c, n), SA.SStructDeref((A.Pipeline(_), _) as e, m)) ->
             let lval' = lvalue builder e in
-            let e' = lvalue builder r in
             let loc = L.build_call pipeline_get_uniform_location_func [|
               lval'; L.build_global_stringptr m "" builder |] "" builder in
             ignore (match b with
-                A.Float -> L.build_call pipeline_set_uniform_float_func [|
-                  lval'; loc; mat_first_elem e' c n builder;
-                  L.const_int i32_t n; L.const_int i32_t c |] "" builder
-              | A.Int -> L.build_call pipeline_set_uniform_int_func [|
-                  lval'; loc; mat_first_elem e' c n builder;
-                  L.const_int i32_t n; L.const_int i32_t c |] "" builder
+                A.Float -> 
+                  let e' = lvalue builder r in
+                  L.build_call pipeline_set_uniform_float_func [|
+                    lval'; loc; mat_first_elem e' c n builder;
+                    L.const_int i32_t n; L.const_int i32_t c |] "" builder
+              | A.Int -> 
+                  let e' = lvalue builder r in
+                  L.build_call pipeline_set_uniform_int_func [|
+                    lval'; loc; mat_first_elem e' c n builder;
+                    L.const_int i32_t n; L.const_int i32_t c |] "" builder
               | A.Bool -> raise (Failure "unimplemented boolean uniforms")
               | _ -> raise (Failure "unimplemented"));
         | _ -> let lval' = lvalue builder l in
@@ -688,7 +691,12 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
           | SA.Bool2Int   ->
               per_component_builder (fun e -> L.build_zext e i32_t) e'
           | SA.Bool2Float ->
-              per_component_builder (fun e -> L.build_uitofp e f32_t) e')
+              per_component_builder (fun e -> L.build_uitofp e f32_t) e'
+          | SA.Int2Bool   ->
+              per_component_builder (L.build_icmp L.Icmp.Ne izero) e'
+          | SA.Float2Bool ->
+              per_component_builder
+                (L.build_fcmp L.Fcmp.One (L.const_float f32_t 0.)) e')
           "tmp" builder
       | SA.STypeCons act ->
           match fst sexpr with
