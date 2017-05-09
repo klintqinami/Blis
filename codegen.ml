@@ -491,7 +491,7 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
                     lval'; loc; mat_first_elem e' c n builder;
                     L.const_int i32_t n; L.const_int i32_t c |] "" builder
               | A.Bool ->
-                  let e' = lvalue builder (A.Mat(A.Int, c, n), SA.SUnop(SA.Bool2Int, e))
+                  let e' = lvalue builder (A.Mat(A.Int, c, n), SA.SUnop(SA.Bool2Int, r))
                   in
                   L.build_call pipeline_set_uniform_int_func [|
                     lval'; loc; mat_first_elem e' c n builder;
@@ -520,20 +520,31 @@ let translate ((structs, pipelines, globals, functions) as program : SA.sprogram
           with Not_found ->
             let loc = L.build_call pipeline_get_uniform_location_func [|
               e'; L.build_global_stringptr m "" builder |] "" builder in
-            let tmp = L.build_alloca (ltype_of_typ (fst sexpr)) "" builder in
-            ignore (match fst sexpr with
+            (match fst sexpr with
                 A.Mat(A.Float, c, r) ->
-                  L.build_call pipeline_get_uniform_float_func [|
+                  let tmp = L.build_alloca (ltype_of_typ (fst sexpr)) "" builder in
+                  ignore (L.build_call pipeline_get_uniform_float_func [|
                     e'; loc; mat_first_elem tmp c r builder |]
-                  "" builder
+                  "" builder);
+                  L.build_load tmp "" builder
               | A.Mat(A.Int, c, r) ->
-                  L.build_call pipeline_get_uniform_int_func [|
+                  let tmp = L.build_alloca (ltype_of_typ (fst sexpr)) "" builder in
+                  ignore (L.build_call pipeline_get_uniform_int_func [|
                     e'; loc; mat_first_elem tmp c r builder |]
-                  "" builder
-              | A.Mat(A.Bool, _, _) ->
-                  raise (Failure "unimplemented boolean uniforms")
-              | _ -> raise (Failure "unimplemented"));
-            L.build_load tmp "" builder)
+                  "" builder);
+                  L.build_load tmp "" builder
+              | A.Mat(A.Bool, c, r) ->
+                  let tmp = L.build_alloca
+                    (ltype_of_typ (A.Mat(A.Int, c, r))) "" builder in
+
+                  ignore (L.build_call pipeline_get_uniform_int_func [|
+                    e'; loc; mat_first_elem tmp c r builder |]
+                  "" builder);
+                  let tmp = L.build_load tmp "" builder in
+                  map_blis_array (fun e ->
+                    L.build_icmp L.Icmp.Ne e izero "" builder) c r tmp ""
+                    builder
+              | _ -> raise (Failure "unimplemented")))
       | SA.SId _ | SA.SStructDeref (_, _) | SA.SArrayDeref (_, _) ->
           L.build_load (lvalue builder sexpr) "load_tmp" builder
       | SA.SBinop (e1, op, e2) ->
