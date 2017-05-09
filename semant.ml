@@ -544,8 +544,10 @@ let check program =
                      -> (Mat(Int, 1, l), IDiv)
           | Mod,    Mat(Int, 1, l),   Mat(Int, 1, l') when l = l'
                      -> (Mat(Int, 1, l), IMod)
-          | Equal,   Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), IEqual)
-          | Neq,     Mat(Int, 1, 1),   Mat(Int, 1, 1)   -> (Mat(Bool, 1, 1), INeq)
+          | Equal,   Mat(Int, 1, l),   Mat(Int, 1, l') when l = l'
+                     -> (Mat(Bool, 1, 1), IEqual)
+          | Neq,     Mat(Int, 1, l),   Mat(Int, 1, l') when l = l'
+                     -> (Mat(Bool, 1, 1), INeq)
           | Add,     Mat(Float, w, l), Mat(Float, w', l') when w = w' && l = l'
                      -> (Mat(Float, w, l), FAdd)
           | Sub,     Mat(Float, w, l), Mat(Float, w', l') when w = w' && l = l' 
