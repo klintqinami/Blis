@@ -12,6 +12,8 @@
 
 @fragment void fshader(vec3 world_pos,
                        vec3 world_normal,
+                       uniform bool checkerboard,
+                       uniform float checkerboard_size,
                        uniform vec3 light_pos,
                        uniform vec4 light_ambient,
                        uniform vec4 light_diffuse,
@@ -23,6 +25,23 @@
                        uniform vec3 eye_pos,
                        out vec4 color)
 {
+  vec4 diffuse;
+  vec4 specular;
+  if (checkerboard) {
+    vec3 scaled_pos = world_pos * (1. / checkerboard_size);
+    vec3 block = vec3(floor(scaled_pos.x), floor(scaled_pos.y), floor(scaled_pos.z));
+    ivec3 block = ivec3(block);
+    bool white = (block.x + block.y + block.z) % 2 == 0;
+    if (white)
+      diffuse = vec4(1.0, 1.0, 1.0, 1.0);
+    else
+      diffuse = vec4(0.0, 0.0, 0.0, 1.0);
+    specular = vec4(1.0, 1.0, 1.0, 1.0);
+  } else {
+    diffuse = mat_diffuse;
+    specular = mat_specular;
+  }
+    
   vec3 viewer_dir = normalize3(eye_pos - world_pos);
   vec3 light_dir = normalize3(light_pos - world_pos);
   vec3 half = normalize3(light_dir + viewer_dir);
@@ -33,12 +52,12 @@
   if (dd < 0.)
     dd = 0.;
 
-  vec4 diffuse_color = dd * light_diffuse * mat_diffuse;
+  vec4 diffuse_color = dd * light_diffuse * diffuse;
 
   dd = dot3(half, world_normal);
   vec4 specular_color;
   if (dd > 0.0)
-    specular_color = pow(dd, mat_shininess) * light_specular * mat_specular;
+    specular_color = pow(dd, mat_shininess) * light_specular * specular;
   else
     specular_color = vec4(0.0, 0.0, 0.0, 1.0);
 
@@ -91,12 +110,16 @@ void set_transform(pipeline my_pipeline p, float theta, float phi, float distanc
 bool mouse_down = false;
 bool x_pressed = false;
 bool z_pressed = false;
+bool c_pressed = false;
+bool d_pressed = false;
 float lastx;
 float lasty;
 const float MOUSE_SPEED = 1.; // degrees per pixel
+bool increasing = false;
 
 void update_camera_pos(window w, inout float theta, inout float phi,
-                       inout float distance)
+                       inout float distance, inout bool checkerboard,
+                       inout bool disco, inout vec4 color)
 {
   if (get_mouse_button(w, MOUSE_BUTTON_LEFT)) {
     float x;
@@ -148,6 +171,44 @@ void update_camera_pos(window w, inout float theta, inout float phi,
   } else {
     z_pressed = false;
   }
+
+  if (get_key(w, KEY_C)) {
+    if (!c_pressed) {
+      checkerboard = !checkerboard;
+    }
+    c_pressed = true;
+  } else {
+    c_pressed = false;
+  }
+
+  if (get_key(w, KEY_D)) {
+    if (!d_pressed) {
+      disco = !disco;
+      if (disco)
+        color = vec4(0., 0.5, 0.5, 1.);
+    }
+    d_pressed = true;
+  } else {
+    d_pressed = false;
+  }
+
+  if (disco) {
+    if (increasing) {
+      color.x = color.x + 0.05;
+      if (color.x > 1.0) {
+        color.x = 1.0;
+        increasing = false;
+      }
+    } else {
+      color.x = color.x - 0.05;
+      if (color.x < 0.0) {
+        color.x = 0.0;
+        increasing = true;
+      }
+    }
+  } else {
+    color = vec4(1.0, 0.8, 0.0, 1.0);
+  }
 }
 
 int main()
@@ -155,7 +216,7 @@ int main()
   vec3[] verts;
   int[] tris;
 
-  if (!read_obj("./kitten.obj", verts, tris)) {
+  if (!read_obj("./bunny_regular.obj", verts, tris)) {
     print("error reading obj file\n");
     return 1;
   }
@@ -183,16 +244,18 @@ int main()
   p.light_specular = vec4(1.0, 1.0, 1.0, 1.0);
 
   p.mat_ambient = vec4(1.0, 0.0, 1.0, 1.0);
-  p.mat_diffuse = vec4(1.0, 0.8, 0.0, 1.0);
   p.mat_specular = p.mat_diffuse;
   p.mat_shininess = 100.;
+
+  p.checkerboard_size = 0.25;
 
   float distance = 2.;
   float theta = 0.;
   float phi = 0.;
+  bool disco = false;
 
   while (true) {
-    update_camera_pos(win, theta, phi, distance);
+    update_camera_pos(win, theta, phi, distance, p.checkerboard, disco, p.mat_diffuse);
     set_transform(p, theta, phi, distance);
     clear(vec4(1., 1., 1., 1.));
     draw(p, length(tris));
