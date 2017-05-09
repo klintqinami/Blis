@@ -812,6 +812,14 @@ let check program =
             | Mat(Int, 1, 1) ->
               [[Mat(Float, 1, 1)], action_unop Float2Int;
                [Mat(Bool, 1, 1)], action_unop Bool2Int]
+            | Mat(Int, 1, w) ->
+                [array_vec_formals (Mat(Int, 1, 1)) w, action_cons;
+                  [Mat(Float, 1, w)], action_unop Float2Int;
+                  [Mat(Bool, 1, w)], action_unop Bool2Int]
+            | Mat(Float, 1, w) ->
+                [array_vec_formals (Mat(Float, 1, 1)) w, action_cons;
+                  [Mat(Int, 1, w)], action_unop Int2Float;
+                  [Mat(Bool, 1, w)], action_unop Bool2Float]
             | Mat(b, 1, w) -> [array_vec_formals (Mat(b, 1, 1)) w, action_cons]
             | Mat(b, w, l) -> [array_vec_formals (Mat(b, 1, l)) w, action_cons]
             | Array(t, Some s) -> [array_vec_formals t s, action_cons]
