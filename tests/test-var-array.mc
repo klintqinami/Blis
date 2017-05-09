@@ -5,5 +5,6 @@ int main()
   a[1] = 2;
   printi(a[0]);
   printi(a[1]);
+  printi(length(a));
   return 0;
 }
