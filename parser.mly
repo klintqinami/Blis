@@ -15,7 +15,7 @@ open Ast
 %token CONST
 %token VOID STRUCT PIPELINE BUFFER WINDOW
 %token GPUONLY GPU VERTEX FRAGMENT
-%token IN OUT INOUT UNIFORM
+%token OUT INOUT UNIFORM
 %token <int> BOOL
 %token <int> BYTE
 %token <int * int> FLOAT

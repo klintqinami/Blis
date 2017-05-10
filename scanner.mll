@@ -87,7 +87,6 @@ rule token = parse
 | "const"  { CONST }
 | "true"   { TRUE }
 | "false"  { FALSE }
-| "in"  { IN }
 | "out" { OUT }
 | "inout" { INOUT }
 | "uniform" { UNIFORM }
