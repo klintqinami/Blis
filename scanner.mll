@@ -97,7 +97,7 @@ rule token = parse
 | "@gpu"      { GPU }
 | "@vertex"   { VERTEX }
 | "@fragment" { FRAGMENT }
-| ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
+| ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as lxm { ID(lxm) }
 | "'" ([^ '\'' '\\'] as c) "'" { CHAR_LITERAL(c) }
 | "'\\n'" { CHAR_LITERAL('\n') }
 | "'\\t'" { CHAR_LITERAL('\t') }
